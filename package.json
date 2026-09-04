@@ -1,0 +1,23 @@
+{
+  "name": "flash-ressolas",
+  "version": "1.0.0",
+  "description": "Sistema de gestao de pedidos de ressolagem e reparo de sapatilhas de escalada - Flash Ressolas",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.public.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.public.json --noEmit",
+    "build:server": "tsc -p tsconfig.json",
+    "build:public": "tsc -p tsconfig.public.json",
+    "test": "tsx --test test/*.test.ts",
+    "start": "node dist/server/server.js",
+    "dev": "tsx watch src/server/server.ts"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  },
+  "license": "UNLICENSED"
+}
