@@ -3,3 +3,11 @@ dist/
 secrets/
 .env
 *.log
+
+# Gerado por `npm run build:public` a partir de src/public-src (o Render recompila
+# isso sozinho a cada deploy) — nunca precisa ir para o repositorio.
+src/public/js/
+
+# Guia de deploy local, com valores especificos deste deploy (ex: hash de senha) —
+# nao e' codigo do app, entao fica so localmente.
+DEPLOY_RENDER.md
