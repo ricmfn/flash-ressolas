@@ -88,6 +88,11 @@ export interface DashboardWeek {
   revenue: number;
 }
 
+export interface DashboardCourtesyMonth {
+  monthISO: string;
+  count: number;
+}
+
 export interface DashboardResponse {
   totalOrders: number;
   pendingCount: number;
@@ -97,6 +102,8 @@ export interface DashboardResponse {
   averageDeliveryDays: number | null;
   weekly: DashboardWeek[];
   weekComparison: { thisWeek: number; lastWeek: number; deltaPct: number | null };
+  courtesyMonthly: DashboardCourtesyMonth[];
+  courtesyThisMonth: number;
 }
 
 export interface ExpenseRowJSON {
