@@ -48,7 +48,8 @@ export class OrderStore {
 
   /**
    * Lista ordenada: pedidos NAO entregues antes dos entregues; dentro de cada grupo,
-   * por prioridade operacional e depois por data do pedido (mais antigo primeiro).
+   * por prioridade operacional e depois por data do pedido (mais recente primeiro,
+   * para que quem acabou de chegar sempre apareca no topo da tela).
    */
   listSorted(): Order[] {
     const all = Array.from(this.byRow.values());
@@ -62,9 +63,10 @@ export class OrderStore {
         if (prio !== 0) return prio;
       }
 
-      const aTime = a.orderedAt?.getTime() ?? Number.POSITIVE_INFINITY;
-      const bTime = b.orderedAt?.getTime() ?? Number.POSITIVE_INFINITY;
-      return aTime - bTime;
+      // Sem data conhecida vai para o final do grupo (nunca "furando fila" por acaso).
+      const aTime = a.orderedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+      const bTime = b.orderedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+      return bTime - aTime;
     });
   }
 }
