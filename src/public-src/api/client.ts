@@ -56,6 +56,7 @@ export interface OrderJSON {
   customerPhone: string;
   phoneDisplay: string | null;
   whatsappOk: boolean;
+  whatsappUrl: string | null;
   shoeModel: string;
   shoeSize: string;
   detail: string;
