@@ -37,12 +37,15 @@ export function createOrderCard({ order, onSaveStatus, onSavePrice }: OrderCardO
       ])
     : el("div", { class: "order-card__photo order-card__photo--placeholder" }, ["Foto indisponível"]);
 
-  const whatsappBtn = order.whatsappOk
+  // Usa o link ja normalizado pelo servidor (com DDI 55 quando o numero na planilha
+  // nao tem): reconstruir isso aqui a partir de customerPhone bruto foi o bug que
+  // mandava o WhatsApp para o contato errado.
+  const whatsappBtn = order.whatsappOk && order.whatsappUrl
     ? el(
         "a",
         {
           class: "btn btn--whatsapp",
-          href: `https://wa.me/${order.customerPhone.replace(/\D/g, "")}`,
+          href: order.whatsappUrl,
           target: "_blank",
           rel: "noopener noreferrer",
         },
