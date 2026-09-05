@@ -11,12 +11,31 @@ export interface DashboardMetrics {
   averageDeliveryDays: number | null;
   weekly: WeeklyPoint[];
   weekComparison: { thisWeek: number; lastWeek: number; deltaPct: number | null };
+  courtesyMonthly: MonthlyCourtesyPoint[];
+  courtesyThisMonth: number;
 }
 
 export interface WeeklyPoint {
   weekStartISO: string;
   orders: number;
   revenue: number;
+}
+
+export interface MonthlyCourtesyPoint {
+  monthISO: string;
+  count: number;
+}
+
+const COURTESY_STATUS = "ENTREGUE - NÃO PAGA";
+/** Quantos meses (incluindo o atual) aparecem no grafico de cortesias do dashboard. */
+const COURTESY_MONTHS_WINDOW = 6;
+
+function startOfMonth(date: Date): Date {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function isoMonth(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function startOfWeek(date: Date): Date {
@@ -63,11 +82,30 @@ export function computeDashboardMetrics(orders: Order[], now: Date = new Date())
   const lastWeek = weeks[weeks.length - 2]?.orders ?? 0;
   const deltaPct = lastWeek > 0 ? ((thisWeek - lastWeek) / lastWeek) * 100 : null;
 
+  // Cortesias (ENTREGUE - NAO PAGA) dos ultimos N meses, agrupadas pela data de ENTREGA
+  // (cai no mes em que o par de sapatilhas efetivamente saiu sem cobranca; usa a data do
+  // pedido so como reserva, caso a entrega nao tenha data registrada).
+  const courtesyMonthly: MonthlyCourtesyPoint[] = [];
+  const currentMonthStart = startOfMonth(now);
+  for (let i = COURTESY_MONTHS_WINDOW - 1; i >= 0; i--) {
+    const monthStart = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth() - i, 1);
+    const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+    const count = orders.filter((o) => {
+      if (o.status !== COURTESY_STATUS) return false;
+      const refDate = o.deliveryDate ?? o.orderedAt;
+      return refDate !== null && refDate >= monthStart && refDate < monthEnd;
+    }).length;
+    courtesyMonthly.push({ monthISO: isoMonth(monthStart), count });
+  }
+  const courtesyThisMonth = courtesyMonthly[courtesyMonthly.length - 1]?.count ?? 0;
+
   return {
     totalOrders: orders.length,
     pendingCount,
     deliveredCount,
     totalRevenue,
+    courtesyMonthly,
+    courtesyThisMonth,
     averageTicket,
     averageDeliveryDays: avgDelivery,
     weekly: weeks,
