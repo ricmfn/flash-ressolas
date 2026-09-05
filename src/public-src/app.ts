@@ -40,10 +40,7 @@ function startApp(): void {
     clear(appRoot);
 
     const header = el("header", { class: "app-header" }, [
-      el("div", { class: "brand-mark brand-mark--small" }, [
-        el("span", { class: "brand-mark__flash" }, ["FL⚡SH"]),
-        el("span", { class: "brand-mark__vertical" }, ["ressolas"]),
-      ]),
+      el("img", { class: "brand-mark brand-mark--small", src: "/logo/flash-logo.png", alt: "Flash Ressolas" }),
       el("nav", { class: "app-nav" }, [
         navButton("orders", "Pedidos"),
         navButton("dashboard", "Dashboard"),
