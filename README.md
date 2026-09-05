@@ -74,7 +74,6 @@ repetida sem duplicar pedidos.
   projeto foi construído, por falta de acesso à internet para instalar
   pacotes. O `tsc --noEmit` (modo `strict`) substitui parcialmente essa
   checagem, mas recomenda-se configurar ESLint antes de expandir o projeto.
-- **Identidade visual**: a fonte "Matech" e os logos originais (pasta do
-  Google Drive) não puderam ser baixados automaticamente; a interface usa
-  "Archivo Black" (Google Fonts) como substituta e um wordmark "FL⚡SH" recriado
-  em CSS/texto, não os arquivos de logo originais.
+- **Identidade visual**: a fonte oficial "Matech" (regular e extra-bold) está
+  embutida em `src/public/fonts/` e o ícone do app usa o logo oficial em
+  formato circular.
