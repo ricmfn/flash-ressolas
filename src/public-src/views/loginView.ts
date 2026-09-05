@@ -51,10 +51,7 @@ export function renderLoginView(container: Element, options: LoginViewOptions): 
         },
       },
       [
-        el("div", { class: "brand-mark" }, [
-          el("span", { class: "brand-mark__flash" }, ["FL⚡SH"]),
-          el("span", { class: "brand-mark__vertical" }, ["ressolas"]),
-        ]),
+        el("img", { class: "brand-mark", src: "/logo/flash-logo.png", alt: "Flash Ressolas" }),
         el("h1", { class: "login-form__title" }, ["Entrar"]),
         usernameInput,
         passwordInput,
