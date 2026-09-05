@@ -113,6 +113,31 @@ test("pedidos nao entregues aparecem antes dos entregues, e cada grupo ordenado 
   assert.deepEqual(rows, [4, 5, 3, 2]);
 });
 
+test("dentro do mesmo grupo/prioridade, o pedido recebido mais recentemente aparece primeiro", () => {
+  const store = new OrderStore();
+  store.replaceAll([
+    makeOrder({ sheetRowIndex: 2, status: "RECEBIDO", orderedAt: new Date("2026-01-01T00:00:00Z") }),
+    makeOrder({ sheetRowIndex: 3, status: "RECEBIDO", orderedAt: new Date("2026-01-15T00:00:00Z") }),
+    makeOrder({ sheetRowIndex: 4, status: "RECEBIDO", orderedAt: new Date("2026-01-08T00:00:00Z") }),
+    makeOrder({ sheetRowIndex: 5, status: "RECEBIDO", orderedAt: null }),
+  ]);
+
+  const rows = store.listSorted().map((o) => o.sheetRowIndex);
+  assert.deepEqual(rows, [3, 4, 2, 5]);
+});
+
+test("no grupo dos entregues, a entrega mais recente tambem aparece primeiro", () => {
+  const store = new OrderStore();
+  store.replaceAll([
+    makeOrder({ sheetRowIndex: 2, status: "ENTREGUE - PAGA", orderedAt: new Date("2026-01-01T00:00:00Z") }),
+    makeOrder({ sheetRowIndex: 3, status: "ENTREGUE - PAGA", orderedAt: new Date("2026-02-01T00:00:00Z") }),
+    makeOrder({ sheetRowIndex: 4, status: "ENTREGUE - PAGA", orderedAt: new Date("2026-01-20T00:00:00Z") }),
+  ]);
+
+  const rows = store.listSorted().map((o) => o.sheetRowIndex);
+  assert.deepEqual(rows, [3, 4, 2]);
+});
+
 test("markSyncError preserva os dados ja carregados (nao esvazia a lista em falha temporaria)", () => {
   const store = new OrderStore();
   store.replaceAll([makeOrder({ sheetRowIndex: 2 }), makeOrder({ sheetRowIndex: 3 })]);
