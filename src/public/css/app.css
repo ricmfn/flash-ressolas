@@ -1,6 +1,21 @@
 /* Flash Ressolas — identidade visual: preto (#0B0B0C) + amarelo-neon (#E8FF2B).
-   Fonte de exibição: Archivo Black (substituindo "Matech", indisponível para uso
-   automatizado neste projeto — ver relatório final). Mobile-first. */
+   Fonte de exibição: Matech (wordmark oficial da marca). Mobile-first. */
+
+@font-face {
+  font-family: "Matech";
+  src: url("/fonts/Matech.woff") format("woff");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Matech";
+  src: url("/fonts/MatechExtraBold.woff") format("woff");
+  font-weight: 800;
+  font-style: normal;
+  font-display: swap;
+}
 
 :root {
   --bg: #0B0B0C;
@@ -15,7 +30,7 @@
   --success: #4ADE80;
   --border: #2C2C30;
   --radius: 14px;
-  --font-display: "Archivo Black", "Anton", "Arial Black", sans-serif;
+  --font-display: "Matech", "Archivo Black", "Anton", "Arial Black", sans-serif;
   --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
@@ -78,6 +93,7 @@ a {
 
 .brand-mark__flash {
   font-family: var(--font-display);
+  font-weight: 800;
   font-size: 2rem;
   letter-spacing: 0.02em;
   color: var(--neon);
