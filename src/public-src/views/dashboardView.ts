@@ -97,11 +97,85 @@ function weekBarChart(dashboard: DashboardResponse): SVGSVGElement {
   return svg;
 }
 
+function monthlyRevenuePanel(
+  dashboard: DashboardResponse,
+  selectedMonthIndex: number,
+  onSelectIndex: (index: number) => void,
+): HTMLElement {
+  const months = dashboard.monthlyRevenue;
+  const index = Math.min(Math.max(selectedMonthIndex, 0), months.length - 1);
+  const month = months[index];
+  if (!month) {
+    return el("p", { class: "state-banner state-banner--empty" }, ["Sem histórico de faturamento ainda."]);
+  }
+
+  const canGoPrev = index > 0;
+  const canGoNext = index < months.length - 1;
+
+  return el("div", { class: "month-revenue-panel" }, [
+    el("div", { class: "month-nav" }, [
+      el(
+        "button",
+        {
+          class: "btn btn--ghost month-nav__btn",
+          disabled: !canGoPrev,
+          onclick: () => onSelectIndex(index - 1),
+        },
+        ["◀ Mês anterior"],
+      ),
+      el("strong", { class: "month-nav__label" }, [monthLabel(month.monthISO)]),
+      el(
+        "button",
+        {
+          class: "btn btn--ghost month-nav__btn",
+          disabled: !canGoNext,
+          onclick: () => onSelectIndex(index + 1),
+        },
+        ["Próximo mês ▶"],
+      ),
+    ]),
+    el("div", { class: "stat-grid" }, [
+      statCardPlain("Faturamento do mês", formatBRL(month.revenue)),
+      statCardPlain("Pedidos pagos no mês", String(month.orders)),
+    ]),
+    el("table", { class: "weeks-table" }, [
+      el("thead", {}, [
+        el("tr", {}, [
+          el("th", {}, ["Semana"]),
+          el("th", {}, ["Pedidos"]),
+          el("th", {}, ["Faturamento"]),
+        ]),
+      ]),
+      el(
+        "tbody",
+        {},
+        month.weeks.map((w) =>
+          el("tr", {}, [
+            el("td", {}, [w.label]),
+            el("td", {}, [String(w.orders)]),
+            el("td", {}, [formatBRL(w.revenue)]),
+          ]),
+        ),
+      ),
+    ]),
+  ]);
+}
+
+function statCardPlain(label: string, value: string): HTMLElement {
+  return el("div", { class: "stat-card" }, [
+    el("span", { class: "stat-card__label" }, [label]),
+    el("strong", { class: "stat-card__value" }, [value]),
+  ]);
+}
+
 export function renderDashboardView(container: Element): DashboardViewHandle {
   let dashboard: DashboardResponse | null = null;
   let expenses: ExpensesResponse | null = null;
   let loading = true;
   let error: string | null = null;
+  // Indice selecionado dentro de dashboard.monthlyRevenue (historico de faturamento mensal).
+  // null = ainda nao inicializado; sera ajustado para o ultimo mes (atual) no primeiro render com dados.
+  let selectedMonthIndex: number | null = null;
 
   const root = el("div", { class: "dashboard-view" });
   container.appendChild(root);
@@ -125,6 +199,10 @@ export function renderDashboardView(container: Element): DashboardViewHandle {
     }
 
     if (!dashboard) return;
+
+    if (selectedMonthIndex === null && dashboard.monthlyRevenue.length > 0) {
+      selectedMonthIndex = dashboard.monthlyRevenue.length - 1; // mes atual por padrao
+    }
 
     // ---------- Pedidos ----------
     root.appendChild(
@@ -161,6 +239,17 @@ export function renderDashboardView(container: Element): DashboardViewHandle {
           ),
         ]),
         weekBarChart(dashboard),
+      ]),
+    );
+
+    // ---------- Faturamento mensal (historico semanal e mensal) ----------
+    root.appendChild(
+      el("section", { class: "dashboard-section" }, [
+        el("h2", {}, ["Faturamento mensal"]),
+        monthlyRevenuePanel(dashboard, selectedMonthIndex ?? 0, (index) => {
+          selectedMonthIndex = index;
+          render();
+        }),
       ]),
     );
 
