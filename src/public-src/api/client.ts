@@ -94,6 +94,21 @@ export interface DashboardCourtesyMonth {
   count: number;
 }
 
+export interface DashboardWeekOfMonth {
+  label: string;
+  startDay: number;
+  endDay: number;
+  orders: number;
+  revenue: number;
+}
+
+export interface DashboardMonthlyRevenue {
+  monthISO: string;
+  orders: number;
+  revenue: number;
+  weeks: DashboardWeekOfMonth[];
+}
+
 export interface DashboardResponse {
   totalOrders: number;
   pendingCount: number;
@@ -105,6 +120,7 @@ export interface DashboardResponse {
   weekComparison: { thisWeek: number; lastWeek: number; deltaPct: number | null };
   courtesyMonthly: DashboardCourtesyMonth[];
   courtesyThisMonth: number;
+  monthlyRevenue: DashboardMonthlyRevenue[];
 }
 
 export interface ExpenseRowJSON {
