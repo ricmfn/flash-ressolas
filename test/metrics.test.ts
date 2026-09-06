@@ -168,3 +168,53 @@ test("faturamento mensal: soma apenas ENTREGUE - PAGA, na semana correta, usando
   assert.equal(june?.weeks[3]?.orders, 0);
   assert.equal(june?.weeks[3]?.revenue, 0);
 });
+
+test("faturamento mensal: pedidos com data de entrega 'carimbada' em 05/09/2026 (atualizacao em lote) usam a data de ENTRADA em vez da data de entrega", () => {
+  const now = new Date("2026-09-10T12:00:00Z");
+  const orders = [
+    // Data de entrega = 05/09/2026 (data da atualizacao em lote, nao confiavel) -> usa a data
+    // de entrada (28/08) para atribuir o faturamento, caindo em agosto, semana 4 (22-28).
+    makeOrder({
+      sheetRowIndex: 2,
+      status: "ENTREGUE - PAGA",
+      orderedAt: new Date("2026-08-28T00:00:00Z"),
+      deliveryDate: new Date("2026-09-05T00:00:00Z"),
+      price: 100,
+    }),
+    // Data de entrega = 06/09/2026 (dia seguinte, real) -> continua usando a data de entrega
+    // normalmente, contando em setembro.
+    makeOrder({
+      sheetRowIndex: 3,
+      status: "ENTREGUE - PAGA",
+      orderedAt: new Date("2026-09-01T00:00:00Z"),
+      deliveryDate: new Date("2026-09-06T00:00:00Z"),
+      price: 50,
+    }),
+    // Data de entrega = 20/07/2026 (bem antes da atualizacao em lote, valida) -> continua
+    // usando a data de entrega normalmente, contando em julho.
+    makeOrder({
+      sheetRowIndex: 4,
+      status: "ENTREGUE - PAGA",
+      orderedAt: new Date("2026-07-15T00:00:00Z"),
+      deliveryDate: new Date("2026-07-20T00:00:00Z"),
+      price: 30,
+    }),
+  ];
+
+  const metrics = computeDashboardMetrics(orders, now);
+  const august = metrics.monthlyRevenue.find((m) => m.monthISO === "2026-08");
+  const september = metrics.monthlyRevenue.find((m) => m.monthISO === "2026-09");
+  const july = metrics.monthlyRevenue.find((m) => m.monthISO === "2026-07");
+
+  assert.equal(august?.orders, 1);
+  assert.equal(august?.revenue, 100);
+  assert.equal(august?.weeks[3]?.startDay, 22);
+  assert.equal(august?.weeks[3]?.orders, 1);
+  assert.equal(august?.weeks[3]?.revenue, 100);
+
+  assert.equal(september?.orders, 1);
+  assert.equal(september?.revenue, 50);
+
+  assert.equal(july?.orders, 1);
+  assert.equal(july?.revenue, 30);
+});
