@@ -13,6 +13,7 @@ export interface DashboardMetrics {
   weekComparison: { thisWeek: number; lastWeek: number; deltaPct: number | null };
   courtesyMonthly: MonthlyCourtesyPoint[];
   courtesyThisMonth: number;
+  monthlyRevenue: MonthlyRevenuePoint[];
 }
 
 export interface WeeklyPoint {
@@ -26,9 +27,27 @@ export interface MonthlyCourtesyPoint {
   count: number;
 }
 
+/** Uma semana DENTRO de um mes especifico (semana 1 = dias 1-7, semana 2 = dias 8-14, ...). */
+export interface WeekOfMonthPoint {
+  label: string;
+  startDay: number;
+  endDay: number;
+  orders: number;
+  revenue: number;
+}
+
+export interface MonthlyRevenuePoint {
+  monthISO: string;
+  orders: number;
+  revenue: number;
+  weeks: WeekOfMonthPoint[];
+}
+
 const COURTESY_STATUS = "ENTREGUE - NÃO PAGA";
 /** Quantos meses (incluindo o atual) aparecem no grafico de cortesias do dashboard. */
 const COURTESY_MONTHS_WINDOW = 6;
+/** Quantos meses (incluindo o atual) ficam disponiveis no historico de faturamento mensal. */
+const MONTHLY_REVENUE_MONTHS_WINDOW = 12;
 
 function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -48,6 +67,52 @@ function startOfWeek(date: Date): Date {
 
 function isoDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function daysInMonth(year: number, monthIndex0: number): number {
+  return new Date(year, monthIndex0 + 1, 0).getDate();
+}
+
+/**
+ * Divide um mes em blocos de 7 dias (semana 1 = dias 1-7, semana 2 = dias 8-14, ...; o
+ * ultimo bloco pode ter menos de 7 dias) e soma pedidos ENTREGUE - PAGA em cada bloco,
+ * usando a data de ENTREGA (com o pedido como reserva) - mesmo criterio do faturamento
+ * usado nas cortesias, para que "faturamento do mes" reflita quando o dinheiro entrou.
+ */
+function computeWeeksOfMonth(orders: Order[], monthStart: Date): MonthlyRevenuePoint {
+  const year = monthStart.getFullYear();
+  const monthIndex = monthStart.getMonth();
+  const totalDays = daysInMonth(year, monthIndex);
+  const monthEnd = new Date(year, monthIndex + 1, 1);
+
+  const paidInMonth = orders.filter((o) => {
+    if (o.status !== "ENTREGUE - PAGA" || o.price === null) return false;
+    const refDate = o.deliveryDate ?? o.orderedAt;
+    return refDate !== null && refDate >= monthStart && refDate < monthEnd;
+  });
+
+  const weeks: WeekOfMonthPoint[] = [];
+  let monthOrders = 0;
+  let monthRevenue = 0;
+  for (let startDay = 1; startDay <= totalDays; startDay += 7) {
+    const endDay = Math.min(startDay + 6, totalDays);
+    const inWeek = paidInMonth.filter((o) => {
+      const day = (o.deliveryDate ?? o.orderedAt)!.getDate();
+      return day >= startDay && day <= endDay;
+    });
+    const revenue = inWeek.reduce((sum, o) => sum + (o.price ?? 0), 0);
+    weeks.push({
+      label: `Semana ${weeks.length + 1} (${String(startDay).padStart(2, "0")}–${String(endDay).padStart(2, "0")})`,
+      startDay,
+      endDay,
+      orders: inWeek.length,
+      revenue,
+    });
+    monthOrders += inWeek.length;
+    monthRevenue += revenue;
+  }
+
+  return { monthISO: isoMonth(monthStart), orders: monthOrders, revenue: monthRevenue, weeks };
 }
 
 export function computeDashboardMetrics(orders: Order[], now: Date = new Date()): DashboardMetrics {
@@ -99,6 +164,13 @@ export function computeDashboardMetrics(orders: Order[], now: Date = new Date())
   }
   const courtesyThisMonth = courtesyMonthly[courtesyMonthly.length - 1]?.count ?? 0;
 
+  // Faturamento mensal (ultimos N meses), cada mes dividido em semanas de 7 dias.
+  const monthlyRevenue: MonthlyRevenuePoint[] = [];
+  for (let i = MONTHLY_REVENUE_MONTHS_WINDOW - 1; i >= 0; i--) {
+    const monthStart = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth() - i, 1);
+    monthlyRevenue.push(computeWeeksOfMonth(orders, monthStart));
+  }
+
   return {
     totalOrders: orders.length,
     pendingCount,
@@ -106,6 +178,7 @@ export function computeDashboardMetrics(orders: Order[], now: Date = new Date())
     totalRevenue,
     courtesyMonthly,
     courtesyThisMonth,
+    monthlyRevenue,
     averageTicket,
     averageDeliveryDays: avgDelivery,
     weekly: weeks,
