@@ -20,9 +20,24 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
   let searchTerm = "";
   let statusFilter: OrderStatus | "TODOS" = "TODOS";
   let hasLoadedOnce = false;
+  // Debounce da busca: digitar nunca deve travar a tela (o input em si nunca e recriado —
+  // so o conteudo abaixo dele e atualizado, e com um pequeno atraso para nao re-renderizar
+  // a lista inteira a cada tecla).
+  let searchDebounceHandle: ReturnType<typeof setTimeout> | null = null;
+  const SEARCH_DEBOUNCE_MS = 120;
 
   const root = el("div", { class: "orders-view" });
   container.appendChild(root);
+
+  // Containers persistentes: criados uma unica vez e nunca recriados (nem limpos) enquanto
+  // o usuario digita na busca — isso e o que elimina o travamento a cada letra, porque o
+  // <input> nunca perde foco/estado e a lista so e recalculada, nao o toolbar inteiro.
+  const toolbar = el("div", { class: "orders-toolbar" });
+  const summary = el("div", { class: "orders-summary" });
+  const content = el("div", { class: "orders-content" });
+  root.appendChild(toolbar);
+  root.appendChild(summary);
+  root.appendChild(content);
 
   const DIACRITICS_RE = new RegExp("[\\u0300-\\u036f]", "g");
 
@@ -48,7 +63,9 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
     if (result.ok) {
       const idx = orders.findIndex((o) => o.sheetRowIndex === sheetRowIndex);
       if (idx >= 0) orders[idx] = result.data.order;
-      render();
+      // So o conteudo muda aqui (status/preco de um pedido) — nunca o toolbar, para nao
+      // atrapalhar o usuario se ele estiver com texto digitado na busca.
+      renderContent();
       return { ok: true as const };
     }
     return { ok: false as const, error: result.error };
@@ -59,7 +76,7 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
     if (result.ok) {
       const idx = orders.findIndex((o) => o.sheetRowIndex === sheetRowIndex);
       if (idx >= 0) orders[idx] = result.data.order;
-      render();
+      renderContent();
       return { ok: true as const };
     }
     return { ok: false as const, error: result.error };
@@ -79,10 +96,14 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
     }
   }
 
-  function render(): void {
-    clear(root);
-
-    const toolbar = el("div", { class: "orders-toolbar" }, [
+  /**
+   * Reconstroi so o toolbar (busca + filtro + botao de sync). So deve ser chamado quando algo
+   * fora da busca muda (estado de sincronizacao, filtro, carga inicial) — nunca a cada tecla
+   * digitada, senao o <input> e recriado e a digitacao trava/perde fluidez.
+   */
+  function renderToolbar(): void {
+    clear(toolbar);
+    toolbar.appendChild(
       el("input", {
         type: "search",
         class: "orders-toolbar__search",
@@ -90,16 +111,25 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
         value: searchTerm,
         oninput: (ev) => {
           searchTerm = (ev.target as HTMLInputElement).value;
-          render();
+          // Debounce leve: a lista so e refeita um pouco depois de parar de digitar, para que
+          // a digitacao em si nunca seja bloqueada por um re-render pesado (efeito "instantaneo",
+          // tipo Spotlight). O input nunca e tocado aqui — so o conteudo abaixo dele.
+          if (searchDebounceHandle !== null) clearTimeout(searchDebounceHandle);
+          searchDebounceHandle = setTimeout(() => {
+            searchDebounceHandle = null;
+            renderContent();
+          }, SEARCH_DEBOUNCE_MS);
         },
       }),
+    );
+    toolbar.appendChild(
       el(
         "select",
         {
           class: "orders-toolbar__filter",
           onchange: (ev) => {
             statusFilter = (ev.target as HTMLSelectElement).value as OrderStatus | "TODOS";
-            render();
+            renderContent();
           },
         },
         [
@@ -109,6 +139,8 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
           ),
         ],
       ),
+    );
+    toolbar.appendChild(
       el(
         "button",
         {
@@ -118,22 +150,25 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
         },
         [syncing ? "Sincronizando…" : "Atualizar / Sincronizar"],
       ),
-    ]);
+    );
+  }
 
-    const summary = el("div", { class: "orders-summary" }, [
-      el("span", { class: "orders-summary__pending" }, [`${pendingCount} pendente(s)`]),
-      lastSyncedAt
-        ? el("span", { class: "orders-summary__synced" }, [
-            `Última sincronização: ${new Date(lastSyncedAt).toLocaleString("pt-BR")}`,
-          ])
-        : null,
-    ]);
+  /** Reconstroi o resumo + a lista de pedidos (nunca o toolbar/input de busca). */
+  function renderContent(): void {
+    clear(summary);
+    summary.appendChild(el("span", { class: "orders-summary__pending" }, [`${pendingCount} pendente(s)`]));
+    if (lastSyncedAt) {
+      summary.appendChild(
+        el("span", { class: "orders-summary__synced" }, [
+          `Última sincronização: ${new Date(lastSyncedAt).toLocaleString("pt-BR")}`,
+        ]),
+      );
+    }
 
-    root.appendChild(toolbar);
-    root.appendChild(summary);
+    clear(content);
 
     if (loadError) {
-      root.appendChild(
+      content.appendChild(
         el("div", { class: "state-banner state-banner--error" }, [
           el("p", {}, [loadError]),
           el("button", { class: "btn btn--primary", onclick: () => void refresh(true) }, ["Tentar novamente"]),
@@ -145,14 +180,14 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
     }
 
     if (loading && !hasLoadedOnce) {
-      root.appendChild(el("div", { class: "state-banner state-banner--loading" }, ["Carregando pedidos…"]));
+      content.appendChild(el("div", { class: "state-banner state-banner--loading" }, ["Carregando pedidos…"]));
       return;
     }
 
     const visible = filteredOrders();
 
     if (visible.length === 0) {
-      root.appendChild(
+      content.appendChild(
         el("div", { class: "state-banner state-banner--empty" }, [
           orders.length === 0 ? "Nenhum pedido encontrado ainda." : "Nenhum pedido corresponde à busca/filtro.",
         ]),
@@ -170,12 +205,21 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
         }),
       );
     }
-    root.appendChild(list);
+    content.appendChild(list);
+  }
+
+  /** Reconstroi tudo: toolbar + resumo/lista. So usar fora do fluxo de digitacao na busca. */
+  function render(): void {
+    renderToolbar();
+    renderContent();
   }
 
   async function refresh(showSpinner = true): Promise<void> {
     if (showSpinner) loading = true;
-    render();
+    // renderContent (nao render) — refresh nunca muda estado do toolbar, e isso evita
+    // recriar o <input> de busca (e perder foco/cursor) durante o auto-refresh periodico
+    // enquanto o usuario esta digitando.
+    renderContent();
     const result = await api.orders();
     loading = false;
     if (result.ok) {
@@ -188,7 +232,7 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
       // Preserva os dados ja carregados; so mostra erro retry-avel.
       loadError = result.error;
     }
-    render();
+    renderContent();
   }
 
   render();
