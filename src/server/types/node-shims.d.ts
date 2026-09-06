@@ -93,7 +93,7 @@ declare module "node:crypto" {
 // ---------- node:fs ----------
 declare module "node:fs" {
   export function readFileSync(path: string, encoding: string): string;
-  export function statSync(path: string): { isFile(): boolean; size: number };
+  export function statSync(path: string): { isFile(): boolean; size: number; mtime: Date; mtimeMs: number };
   export function createReadStream(path: string): { pipe(dest: unknown): void };
 }
 
