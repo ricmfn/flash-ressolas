@@ -50,6 +50,13 @@ html, body {
 body {
   min-height: 100vh;
   min-height: 100dvh;
+  /* Plano de fundo: foto de luzes bokeh, escurecida com um degrade escuro por cima
+     pra manter o texto e os cards legiveis. Sem "background-attachment: fixed" —
+     e' mobile-first e esse modo tem suporte inconsistente no Safari do iOS. */
+  background-image: linear-gradient(rgba(11, 11, 12, 0.82), rgba(11, 11, 12, 0.9)), url("/images/bg-lights.jpg");
+  background-size: cover;
+  background-position: center top;
+  background-repeat: no-repeat;
 }
 
 .app-root {
