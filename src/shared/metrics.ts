@@ -48,6 +48,15 @@ const COURTESY_STATUS = "ENTREGUE - NÃO PAGA";
 const COURTESY_MONTHS_WINDOW = 6;
 /** Quantos meses (incluindo o atual) ficam disponiveis no historico de faturamento mensal. */
 const MONTHLY_REVENUE_MONTHS_WINDOW = 12;
+/**
+ * Em 05/09/2026 varios pedidos foram atualizados em lote na planilha e todos ficaram com essa
+ * MESMA data de entrega, mesmo os que nao foram de fato entregues/pagos nesse dia especifico —
+ * entao essa data, quando aparece como data de entrega, e' tratada como nao confiavel para fins
+ * de faturamento e o pedido usa a data de ENTRADA (do pedido) em vez dela. Pedidos com qualquer
+ * outra data de entrega (de antes ou de depois desse dia) continuam usando a data de entrega
+ * normalmente.
+ */
+const UNRELIABLE_BULK_DELIVERY_DATE_ISO = "2026-09-05";
 
 function startOfMonth(date: Date): Date {
   return new Date(date.getFullYear(), date.getMonth(), 1);
@@ -74,10 +83,23 @@ function daysInMonth(year: number, monthIndex0: number): number {
 }
 
 /**
+ * Data de referencia usada para atribuir o faturamento de um pedido a um mes/semana: a data de
+ * ENTREGA normalmente, com o pedido como reserva se nao houver data de entrega registrada — MAS
+ * se a data de entrega for exatamente UNRELIABLE_BULK_DELIVERY_DATE_ISO (a data "carimbada" na
+ * atualizacao em lote), usa a data de ENTRADA do pedido em vez dela, pois essa data de entrega
+ * especifica nao reflete uma entrega/pagamento real.
+ */
+function revenueRefDate(o: Order): Date | null {
+  if (o.deliveryDate !== null && isoDate(o.deliveryDate) === UNRELIABLE_BULK_DELIVERY_DATE_ISO) {
+    return o.orderedAt;
+  }
+  return o.deliveryDate ?? o.orderedAt;
+}
+
+/**
  * Divide um mes em blocos de 7 dias (semana 1 = dias 1-7, semana 2 = dias 8-14, ...; o
  * ultimo bloco pode ter menos de 7 dias) e soma pedidos ENTREGUE - PAGA em cada bloco,
- * usando a data de ENTREGA (com o pedido como reserva) - mesmo criterio do faturamento
- * usado nas cortesias, para que "faturamento do mes" reflita quando o dinheiro entrou.
+ * usando revenueRefDate() como data de referencia (ver acima).
  */
 function computeWeeksOfMonth(orders: Order[], monthStart: Date): MonthlyRevenuePoint {
   const year = monthStart.getFullYear();
@@ -87,7 +109,7 @@ function computeWeeksOfMonth(orders: Order[], monthStart: Date): MonthlyRevenueP
 
   const paidInMonth = orders.filter((o) => {
     if (o.status !== "ENTREGUE - PAGA" || o.price === null) return false;
-    const refDate = o.deliveryDate ?? o.orderedAt;
+    const refDate = revenueRefDate(o);
     return refDate !== null && refDate >= monthStart && refDate < monthEnd;
   });
 
@@ -97,7 +119,7 @@ function computeWeeksOfMonth(orders: Order[], monthStart: Date): MonthlyRevenueP
   for (let startDay = 1; startDay <= totalDays; startDay += 7) {
     const endDay = Math.min(startDay + 6, totalDays);
     const inWeek = paidInMonth.filter((o) => {
-      const day = (o.deliveryDate ?? o.orderedAt)!.getDate();
+      const day = revenueRefDate(o)!.getDate();
       return day >= startDay && day <= endDay;
     });
     const revenue = inWeek.reduce((sum, o) => sum + (o.price ?? 0), 0);
