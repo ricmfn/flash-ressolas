@@ -37,11 +37,14 @@ interface CachedToken {
 
 let cached: CachedToken | null = null;
 
+// Um unico escopo combinado (Sheets + Drive) usado em TODA chamada — inclusive as que só
+// precisam de Sheets. Isso mantém o cache abaixo simples (uma unica entrada, sem precisar
+// indexar por escopo): se cada chamador pedisse um escopo diferente, o cache serviria o
+// token errado pra metade das chamadas.
+const DEFAULT_SCOPE = "https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive";
+
 /** Retorna um access token valido, reaproveitando o cache enquanto nao expirar. */
-export async function getAccessToken(
-  account: ServiceAccountKey,
-  scope = "https://www.googleapis.com/auth/spreadsheets",
-): Promise<string> {
+export async function getAccessToken(account: ServiceAccountKey, scope = DEFAULT_SCOPE): Promise<string> {
   const now = Date.now();
   if (cached && cached.expiresAtMs - now > 60_000) {
     return cached.accessToken;
