@@ -3,9 +3,18 @@ import { config } from "./config.js";
 import { parseOrderRow } from "../shared/rowParser.js";
 import { resolveWriteTargets, columnIndexToA1 } from "../shared/writeTarget.js";
 import { parseBRLCurrency } from "../shared/currency.js";
-import { toISODateString } from "../shared/dates.js";
+import { formatBRTimestamp, toISODateString } from "../shared/dates.js";
 import { VALID_STATUSES, isDeliveredStatus, type OrderStatus } from "../shared/status.js";
 import type { Order } from "../shared/types.js";
+
+export interface DropoffEntry {
+  customerName: string;
+  customerPhone: string;
+  brandModel: string;
+  sizeEU: string;
+  photoUrl: string | null;
+  originLabel: string;
+}
 
 const ORDERS_RANGE_ALL = `${config.ordersSheetName}!A2:M`;
 
@@ -119,5 +128,27 @@ export class OrdersRepository {
 
     const rowAfter = await this.readFreshRow(sheetRowIndex);
     return parseOrderRow(rowAfter, sheetRowIndex);
+  }
+
+  /**
+   * Adiciona uma linha nova (pedido chegado pela drop-off box) na MESMA aba dos pedidos
+   * do formulário, respeitando as colunas fixas A..G (rowParser.ts) e usando a coluna H
+   * (texto livre, igual a qualquer observação de formulário) pra registrar de qual caixa
+   * físisca o pedido veio — o app já trata esse texto como "detail"/observação.
+   */
+  async appendDropoff(entry: DropoffEntry): Promise<void> {
+    const id = `DROPOFF-${Date.now()}`;
+    const timestamp = formatBRTimestamp(new Date());
+    const row = [
+      id,
+      timestamp,
+      entry.customerName,
+      entry.customerPhone,
+      entry.brandModel,
+      entry.sizeEU,
+      entry.photoUrl ?? "",
+      entry.originLabel,
+    ];
+    await this.sheets.appendRow(config.ordersSheetName, row);
   }
 }
