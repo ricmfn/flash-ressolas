@@ -91,6 +91,27 @@ export function averageDeliveryDays(
   return sum / durations.length;
 }
 
+/**
+ * Formata um instante como "dd/mm/aaaa hh:mm:ss" no fuso horario informado (o app roda no
+ * servidor em UTC, mas o "Carimbo de data/hora" da planilha é sempre hora de Brasília —
+ * sem isso, uma gravação feita pelo servidor ficaria com 3h de diferença do que as
+ * pessoas esperam ver na planilha).
+ */
+export function formatBRTimestamp(date: Date, timeZone = "America/Sao_Paulo"): string {
+  const parts = new Intl.DateTimeFormat("pt-BR", {
+    timeZone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  return `${get("day")}/${get("month")}/${get("year")} ${get("hour")}:${get("minute")}:${get("second")}`;
+}
+
 export function toISODateString(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
