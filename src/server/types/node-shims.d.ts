@@ -63,7 +63,7 @@ declare function fetch(
   init?: {
     method?: string;
     headers?: HeadersInit;
-    body?: string | URLSearchParams;
+    body?: string | URLSearchParams | Buffer;
   },
 ): Promise<Response>;
 
