@@ -18,6 +18,11 @@ export function renderLoginView(container: Element, options: LoginViewOptions): 
       class: "login-form__input",
       placeholder: "Usuário",
       autocomplete: "username",
+      // Sem isso, o teclado do celular capitaliza a primeira letra sozinho (vira
+      // "Ricardo" em vez de "ricardo") e o login falha sem o usuário entender por quê.
+      autocapitalize: "off",
+      autocorrect: "off",
+      spellcheck: "false",
       required: true,
     }) as HTMLInputElement;
 
