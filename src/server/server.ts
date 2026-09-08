@@ -13,8 +13,10 @@ import { verifyPassword } from "./auth/password.js";
 import { createSessionToken } from "./auth/session.js";
 import { requireAuth, SESSION_COOKIE } from "./auth/middleware.js";
 import { orderToJSON } from "./serialize.js";
+import { uploadPublicPhoto } from "./google/driveClient.js";
 import { computeDashboardMetrics, summarizeExpenses } from "../shared/metrics.js";
 import { isValidStatus, isPending } from "../shared/status.js";
+import { resolveDropoffLabel } from "../shared/dropoffLocations.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 // O frontend (src/public-src) compila diretamente para src/public/js, e os demais
@@ -38,15 +40,21 @@ router.post("/api/login", async (ctx) => {
   if (!body.username || !body.password) {
     return sendJson(ctx.res, 400, { error: "Informe usuário e senha." });
   }
-  if (body.username !== config.authUsername || !verifyPassword(body.password, config.authPasswordHash)) {
+  // Compara usuario sem diferenciar maiusculas/minusculas: teclados de celular costumam
+  // capitalizar a primeira letra de um campo de texto automaticamente (autocapitalize),
+  // o que faria "ricardo" virar "Ricardo" sem o usuario perceber e derrubar um login
+  // com a senha certa. A senha continua comparada exatamente (case-sensitive).
+  const usernameMatches = body.username.trim().toLowerCase() === config.authUsername.trim().toLowerCase();
+  if (!usernameMatches || !verifyPassword(body.password, config.authPasswordHash)) {
     return sendJson(ctx.res, 401, { error: "Usuário ou senha incorretos." });
   }
-  const token = createSessionToken(body.username, config.sessionSecret);
+  const normalizedUsername = config.authUsername.trim();
+  const token = createSessionToken(normalizedUsername, config.sessionSecret);
   ctx.res.setHeader(
     "Set-Cookie",
     `${SESSION_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=${30 * 24 * 60 * 60}; SameSite=Lax`,
   );
-  sendJson(ctx.res, 200, { ok: true, username: body.username });
+  sendJson(ctx.res, 200, { ok: true, username: normalizedUsername });
 });
 
 router.post("/api/logout", (ctx) => {
@@ -143,6 +151,64 @@ router.get("/api/expenses", async (ctx) => {
   } catch (err) {
     sendJson(ctx.res, 502, { error: err instanceof Error ? err.message : "Erro ao ler despesas." });
   }
+});
+
+// ---------- Drop-off box (formulário público, sem login, pra QR code na loja) ----------
+
+router.post("/api/dropoff", async (ctx) => {
+  const body = await readJsonBody<{
+    customerName?: string;
+    customerPhone?: string;
+    brandModel?: string;
+    sizeEU?: string;
+    photoBase64?: string;
+    photoMime?: string;
+    local?: string;
+  }>(ctx.req, 8_000_000);
+
+  const customerName = (body.customerName ?? "").trim();
+  const customerPhone = (body.customerPhone ?? "").trim();
+  const brandModel = (body.brandModel ?? "").trim();
+  const sizeRaw = (body.sizeEU ?? "").trim();
+
+  if (!customerName || !customerPhone || !brandModel || !sizeRaw) {
+    return sendJson(ctx.res, 400, { error: "Preencha nome, WhatsApp, marca/modelo e numeração." });
+  }
+
+  const sizeEU = /^eu\b/i.test(sizeRaw) ? sizeRaw : `EU ${sizeRaw}`;
+  const originLabel = resolveDropoffLabel(body.local);
+
+  let photoUrl: string | null = null;
+  if (body.photoBase64) {
+    try {
+      const commaIdx = body.photoBase64.indexOf(",");
+      const base64 =
+        commaIdx !== -1 && body.photoBase64.startsWith("data:") ? body.photoBase64.slice(commaIdx + 1) : body.photoBase64;
+      const bytes = Buffer.from(base64, "base64");
+      const mime = body.photoMime && body.photoMime.startsWith("image/") ? body.photoMime : "image/jpeg";
+      const ext = mime === "image/png" ? "png" : "jpg";
+      photoUrl = await uploadPublicPhoto(account, bytes, mime, `dropoff-${Date.now()}.${ext}`);
+    } catch (err) {
+      // Nao bloqueia a entrega do pedido por causa da foto — melhor registrar sem foto
+      // (o lojista pede por WhatsApp depois) do que perder o pedido inteiro.
+      console.error("Falha ao enviar foto da drop-off box para o Drive:", err);
+    }
+  }
+
+  try {
+    await ordersRepo.appendDropoff({ customerName, customerPhone, brandModel, sizeEU, photoUrl, originLabel });
+  } catch (err) {
+    return sendJson(ctx.res, 502, { error: err instanceof Error ? err.message : "Erro ao registrar na planilha." });
+  }
+
+  try {
+    await syncService.sync();
+  } catch {
+    // A gravacao na planilha ja aconteceu (fonte da verdade); uma falha aqui so atrasa
+    // o pedido aparecer no dashboard ate o proximo sync automatico.
+  }
+
+  sendJson(ctx.res, 200, { ok: true, photoUploaded: photoUrl !== null });
 });
 
 router.get("/api/health", (ctx) => {
