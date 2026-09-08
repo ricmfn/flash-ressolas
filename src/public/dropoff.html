@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+  <title>Deixe sua sapatilha — Flash Ressolas</title>
+  <meta name="description" content="Drop-off box Flash Ressolas: deixe sua sapatilha pra ressolar em poucos passos." />
+  <meta name="theme-color" content="#0B0B0C" />
+  <link rel="icon" href="/favicon.png" type="image/png" />
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+  <style>
+    @font-face {
+      font-family: "Matech";
+      src: url("/fonts/MatechExtraBold.woff") format("woff");
+      font-weight: 800;
+      font-style: normal;
+      font-display: swap;
+    }
+
+    :root {
+      --bg: #0B0B0C;
+      --bg-card: #1E1E22;
+      --neon: #E8FF2B;
+      --text: #F5F5F0;
+      --text-dim: #A8A8AC;
+      --danger: #FF5C5C;
+      --danger-bg: #3A1414;
+      --border: #2C2C30;
+      --radius: 14px;
+      --font-display: "Matech", "Archivo Black", "Anton", "Arial Black", sans-serif;
+      --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      background: var(--bg);
+      background-image: linear-gradient(rgba(11, 11, 12, 0.82), rgba(11, 11, 12, 0.92)), url("/images/bg-lights.jpg");
+      background-size: cover;
+      background-position: center top;
+      background-repeat: no-repeat;
+      color: var(--text);
+      font-family: var(--font-body);
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    .wrap {
+      max-width: 480px;
+      margin: 0 auto;
+      padding: 28px 20px 48px;
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      min-height: 100vh;
+      min-height: 100dvh;
+    }
+
+    .brand-mark {
+      display: block;
+      height: 40px;
+      margin: 0 auto;
+    }
+
+    h1 {
+      font-family: var(--font-display);
+      font-weight: 800;
+      font-size: 1.5rem;
+      line-height: 1.2;
+      text-align: center;
+      margin: 0;
+      color: var(--text);
+    }
+
+    .subtitle {
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.92rem;
+      margin: -8px 0 0;
+    }
+
+    .steps-overview {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px 16px;
+      font-size: 0.82rem;
+      color: var(--text-dim);
+      line-height: 1.55;
+    }
+
+    .steps-overview strong {
+      color: var(--text);
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    label {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 0.85rem;
+      color: var(--text-dim);
+    }
+
+    input[type="text"],
+    input[type="tel"] {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 13px 14px;
+      color: var(--text);
+      font-size: 1rem;
+      font-family: inherit;
+      outline: none;
+    }
+
+    input[type="text"]:focus,
+    input[type="tel"]:focus {
+      border-color: var(--neon);
+    }
+
+    .photo-field {
+      background: var(--bg-card);
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .photo-field img {
+      max-width: 100%;
+      max-height: 220px;
+      border-radius: 10px;
+      object-fit: cover;
+    }
+
+    .btn {
+      appearance: none;
+      border: none;
+      border-radius: 999px;
+      padding: 15px 20px;
+      font-size: 1rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      text-align: center;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn--primary {
+      background: var(--neon);
+      color: #0B0B0C;
+    }
+
+    .btn--primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .btn--ghost {
+      background: transparent;
+      color: var(--neon);
+      border: 1px solid var(--neon);
+    }
+
+    .btn--block {
+      width: 100%;
+    }
+
+    .error {
+      background: var(--danger-bg);
+      color: var(--danger);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 0.88rem;
+    }
+
+    .done-screen {
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      text-align: center;
+    }
+
+    .done-check {
+      font-size: 2.4rem;
+    }
+
+    .step-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 18px;
+      text-align: left;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+    }
+
+    .step-num {
+      font-family: var(--font-display);
+      color: var(--neon);
+      font-size: 1.3rem;
+      line-height: 1;
+      flex-shrink: 0;
+      min-width: 1.4em;
+    }
+
+    .step-text {
+      font-size: 0.95rem;
+      line-height: 1.5;
+    }
+
+    .step-text small {
+      display: block;
+      color: var(--text-dim);
+      margin-top: 4px;
+    }
+
+    footer {
+      margin-top: auto;
+      text-align: center;
+      color: var(--text-dim);
+      font-size: 0.78rem;
+      padding-top: 12px;
+    }
+
+    [hidden] {
+      display: none !important;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <img class="brand-mark" src="/logo/flash-logo.png" alt="Flash Ressolas" />
+
+    <div id="formScreen">
+      <h1>Deixe sua sapatilha aqui</h1>
+      <p class="subtitle">Drop-off box — preencha os dados abaixo antes de colocar a sapatilha na caixa.</p>
+
+      <div class="steps-overview">
+        <strong>Como funciona:</strong> preencha seus dados e a foto (passos 1 a 4 abaixo), depois
+        marque a sapatilha com caneta, coloque na caixa e puxe a alavanca. Simples assim.
+      </div>
+
+      <form id="dropoffForm">
+        <div id="errorBox" class="error" hidden></div>
+
+        <label>
+          1. Seu nome
+          <input type="text" id="customerName" name="customerName" autocomplete="name" required />
+        </label>
+
+        <label>
+          2. Seu WhatsApp (com DDD)
+          <input type="tel" id="customerPhone" name="customerPhone" inputmode="tel" autocomplete="tel" placeholder="(11) 91234-5678" required />
+        </label>
+
+        <label>
+          3. Marca e modelo da sapatilha
+          <input type="text" id="brandModel" name="brandModel" placeholder="Ex: La Sportiva Miura" required />
+        </label>
+
+        <label>
+          4. Numeração (europeia)
+          <input type="text" id="sizeEU" name="sizeEU" inputmode="numeric" placeholder="Ex: 40" required />
+        </label>
+
+        <label>
+          Foto da sapatilha
+          <span class="photo-field" id="photoField">
+            <img id="photoPreview" hidden alt="Prévia da foto" />
+            <span id="photoHint">Toque pra tirar uma foto ou escolher da galeria</span>
+            <input type="file" id="photoInput" name="photo" accept="image/*" capture="environment" required style="width:100%" />
+          </span>
+        </label>
+
+        <button type="submit" class="btn btn--primary btn--block" id="submitBtn">Enviar</button>
+      </form>
+    </div>
+
+    <div id="doneScreen" class="done-screen" hidden>
+      <div class="done-check">✔</div>
+      <h1>Recebido!</h1>
+
+      <div class="step-card">
+        <span class="step-num">5</span>
+        <span class="step-text">
+          Marque a sapatilha com caneta permanente.
+          <small>Pode ser uma marca pequena ou grande — o importante é não confundir com outra sapatilha.</small>
+        </span>
+      </div>
+
+      <div class="step-card">
+        <span class="step-num">6</span>
+        <span class="step-text">Coloque a sapatilha na caixa e puxe a alavanca pra baixo.</span>
+      </div>
+
+      <div class="step-card">
+        <span class="step-num">7</span>
+        <span class="step-text">
+          Pronto! Vou entrar em contato assim que possível pelo WhatsApp informado.
+          <small>Se quiser falar comigo antes, é só chamar:</small>
+        </span>
+      </div>
+
+      <a class="btn btn--ghost btn--block" id="whatsappLink" href="https://wa.me/5511997635904" target="_blank" rel="noopener">
+        Falar no WhatsApp — (11) 99763-5904
+      </a>
+    </div>
+
+    <footer>Flash Ressolas · ressolagem e reparo de sapatilhas de escalada</footer>
+  </div>
+
+  <script>
+    (function () {
+      "use strict";
+
+      var params = new URLSearchParams(location.search);
+      var local = params.get("local") || "vila-madalena";
+
+      var form = document.getElementById("dropoffForm");
+      var errorBox = document.getElementById("errorBox");
+      var submitBtn = document.getElementById("submitBtn");
+      var photoInput = document.getElementById("photoInput");
+      var photoPreview = document.getElementById("photoPreview");
+      var photoHint = document.getElementById("photoHint");
+      var formScreen = document.getElementById("formScreen");
+      var doneScreen = document.getElementById("doneScreen");
+
+      var MAX_DIMENSION = 1280;
+      var JPEG_QUALITY = 0.7;
+
+      function showError(msg) {
+        errorBox.textContent = msg;
+        errorBox.hidden = false;
+      }
+
+      function hideError() {
+        errorBox.hidden = true;
+      }
+
+      // Comprime a foto no proprio celular (redimensiona pro maior lado ter no maximo
+      // 1280px e reencoda como JPEG) antes de mandar pro servidor — sem isso, uma foto
+      // direto da camera pode passar de 5-10MB e deixar o envio lento numa loja com
+      // wifi/dados fracos.
+      function compressImage(file) {
+        return new Promise(function (resolve, reject) {
+          var img = new Image();
+          var reader = new FileReader();
+          reader.onerror = function () {
+            reject(new Error("Não consegui ler a foto."));
+          };
+          reader.onload = function () {
+            img.onerror = function () {
+              reject(new Error("Não consegui abrir a foto."));
+            };
+            img.onload = function () {
+              var scale = Math.min(1, MAX_DIMENSION / Math.max(img.width, img.height));
+              var w = Math.round(img.width * scale);
+              var h = Math.round(img.height * scale);
+              var canvas = document.createElement("canvas");
+              canvas.width = w;
+              canvas.height = h;
+              var ctx = canvas.getContext("2d");
+              ctx.drawImage(img, 0, 0, w, h);
+              resolve({ dataUrl: canvas.toDataURL("image/jpeg", JPEG_QUALITY), mime: "image/jpeg" });
+            };
+            img.src = reader.result;
+          };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      photoInput.addEventListener("change", function () {
+        var file = photoInput.files && photoInput.files[0];
+        if (!file) return;
+        var reader = new FileReader();
+        reader.onload = function () {
+          photoPreview.src = reader.result;
+          photoPreview.hidden = false;
+          photoHint.textContent = "Foto selecionada — toque pra trocar";
+        };
+        reader.readAsDataURL(file);
+      });
+
+      form.addEventListener("submit", function (ev) {
+        ev.preventDefault();
+        hideError();
+
+        var customerName = document.getElementById("customerName").value.trim();
+        var customerPhone = document.getElementById("customerPhone").value.trim();
+        var brandModel = document.getElementById("brandModel").value.trim();
+        var sizeEU = document.getElementById("sizeEU").value.trim();
+        var file = photoInput.files && photoInput.files[0];
+
+        if (!customerName || !customerPhone || !brandModel || !sizeEU || !file) {
+          showError("Preenche todos os campos e escolhe uma foto antes de enviar.");
+          return;
+        }
+
+        submitBtn.disabled = true;
+        submitBtn.textContent = "Enviando…";
+
+        compressImage(file)
+          .catch(function () {
+            // Se a compressao falhar por algum motivo, manda a foto original mesmo
+            // (melhor uma foto grande do que nenhuma foto).
+            return new Promise(function (resolve, reject) {
+              var reader = new FileReader();
+              reader.onload = function () {
+                resolve({ dataUrl: reader.result, mime: file.type || "image/jpeg" });
+              };
+              reader.onerror = reject;
+              reader.readAsDataURL(file);
+            });
+          })
+          .then(function (photo) {
+            return fetch("/api/dropoff", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                customerName: customerName,
+                customerPhone: customerPhone,
+                brandModel: brandModel,
+                sizeEU: sizeEU,
+                photoBase64: photo.dataUrl,
+                photoMime: photo.mime,
+                local: local,
+              }),
+            });
+          })
+          .then(function (res) {
+            return res.json().then(function (body) {
+              if (!res.ok || !body.ok) {
+                throw new Error((body && body.error) || "Erro ao enviar. Tenta de novo.");
+              }
+            });
+          })
+          .then(function () {
+            formScreen.hidden = true;
+            doneScreen.hidden = false;
+            window.scrollTo(0, 0);
+          })
+          .catch(function (err) {
+            showError(err.message || "Falha de conexão. Verifique sua internet e tente novamente.");
+          })
+          .finally(function () {
+            submitBtn.disabled = false;
+            submitBtn.textContent = "Enviar";
+          });
+      });
+    })();
+  </script>
+</body>
+</html>
