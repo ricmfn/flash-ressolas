@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { parseFlexibleDate, averageDeliveryDays, daysBetween } from "../src/shared/dates.js";
+import { parseFlexibleDate, averageDeliveryDays, daysBetween, formatBRTimestamp } from "../src/shared/dates.js";
 
 test("parseia dd/mm/aaaa hh:mm:ss", () => {
   const d = parseFlexibleDate("04/12/2025 16:16:54");
@@ -69,4 +69,22 @@ test("averageDeliveryDays ignora pares invalidos e nunca da NaN", () => {
 test("averageDeliveryDays retorna null (nunca NaN) quando nao ha par valido", () => {
   const avg = averageDeliveryDays([{ orderedAt: null, deliveredAt: null }]);
   assert.equal(avg, null);
+});
+
+test("formatBRTimestamp formata em America/Sao_Paulo (UTC-3, sem horario de verao)", () => {
+  // 2026-03-11T15:30:00Z em Brasilia (UTC-3) e' 2026-03-11 12:30:00.
+  const instant = new Date("2026-03-11T15:30:00.000Z");
+  assert.equal(formatBRTimestamp(instant), "11/03/2026 12:30:00");
+});
+
+test("formatBRTimestamp e' consistente com o proprio parseFlexibleDate (ida e volta)", () => {
+  const instant = new Date("2026-09-06T02:05:09.000Z"); // 2026-09-05 23:05:09 em Brasilia
+  const formatted = formatBRTimestamp(instant);
+  const parsedBack = parseFlexibleDate(formatted);
+  assert.ok(parsedBack);
+  assert.equal(parsedBack!.getFullYear(), 2026);
+  assert.equal(parsedBack!.getMonth(), 8); // setembro
+  assert.equal(parsedBack!.getDate(), 5);
+  assert.equal(parsedBack!.getHours(), 23);
+  assert.equal(parsedBack!.getMinutes(), 5);
 });
