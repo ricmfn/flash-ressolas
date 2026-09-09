@@ -317,6 +317,16 @@ a {
   color: var(--neon);
 }
 
+.orders-summary__week {
+  font-weight: 700;
+  color: var(--success);
+}
+
+.orders-summary__search-count {
+  font-weight: 700;
+  color: var(--text);
+}
+
 /* ---------- Order cards ---------- */
 
 .orders-list {
