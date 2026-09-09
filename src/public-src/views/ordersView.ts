@@ -53,9 +53,34 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
       return (
         normalize(o.customerName).includes(term) ||
         normalize(o.customerPhone).includes(term) ||
-        normalize(o.phoneDisplay ?? "").includes(term)
+        normalize(o.phoneDisplay ?? "").includes(term) ||
+        // Campo unico "Marca e Modelo da Sapatilha" na planilha — buscar aqui cobre tanto
+        // marca quanto modelo, ja que nao existem colunas separadas para cada um.
+        normalize(o.shoeModel).includes(term)
       );
     });
+  }
+
+  /** Inicio da semana (domingo, 00:00) que contem `date` — mesma definicao usada no dashboard
+   * (metrics.ts/startOfWeek), para o contador aqui bater com o que aparece no dashboard. */
+  function startOfWeek(date: Date): Date {
+    const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+    const day = d.getDay(); // 0 = domingo
+    d.setDate(d.getDate() - day);
+    d.setHours(0, 0, 0, 0);
+    return d;
+  }
+
+  /** Quantos pedidos (de todos, sem considerar busca/filtro) entraram na semana corrente. */
+  function ordersThisWeekCount(): number {
+    const weekStart = startOfWeek(new Date());
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    return orders.filter((o) => {
+      if (!o.orderedAt) return false;
+      const d = new Date(o.orderedAt);
+      return d >= weekStart && d < weekEnd;
+    }).length;
   }
 
   async function handleSaveStatus(sheetRowIndex: number, status: OrderStatus, deliveryDateISO: string | null) {
@@ -107,7 +132,7 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
       el("input", {
         type: "search",
         class: "orders-toolbar__search",
-        placeholder: "Buscar por nome ou telefone…",
+        placeholder: "Buscar por nome, telefone, marca ou modelo…",
         value: searchTerm,
         oninput: (ev) => {
           searchTerm = (ev.target as HTMLInputElement).value;
@@ -156,7 +181,20 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
   /** Reconstroi o resumo + a lista de pedidos (nunca o toolbar/input de busca). */
   function renderContent(): void {
     clear(summary);
+    const visible = filteredOrders();
+    const isSearching = searchTerm.trim() !== "";
+
     summary.appendChild(el("span", { class: "orders-summary__pending" }, [`${pendingCount} pendente(s)`]));
+    summary.appendChild(
+      el("span", { class: "orders-summary__week" }, [`${ordersThisWeekCount()} pedido(s) nesta semana`]),
+    );
+    if (isSearching) {
+      // So aparece enquanto ha um termo de busca ativo (nome, telefone, marca ou modelo) —
+      // conta quantos pedidos/clientes bateram com essas caracteristicas.
+      summary.appendChild(
+        el("span", { class: "orders-summary__search-count" }, [`${visible.length} cliente(s) encontrado(s)`]),
+      );
+    }
     if (lastSyncedAt) {
       summary.appendChild(
         el("span", { class: "orders-summary__synced" }, [
@@ -183,8 +221,6 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
       content.appendChild(el("div", { class: "state-banner state-banner--loading" }, ["Carregando pedidos…"]));
       return;
     }
-
-    const visible = filteredOrders();
 
     if (visible.length === 0) {
       content.appendChild(
