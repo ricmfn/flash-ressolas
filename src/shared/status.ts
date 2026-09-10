@@ -3,6 +3,7 @@
  * NUNCA adicionar/alterar sem atualizar a planilha e os testes.
  */
 export const VALID_STATUSES = [
+  "AGUARDANDO SAPATILHA",
   "RECEBIDO",
   "EM_CONSERTO",
   "PRONTO",
@@ -50,16 +51,25 @@ export function isPending(status: OrderStatus | string): boolean {
   return !isDeliveredStatus(status);
 }
 
+/** Pedido cujo formulario ja foi preenchido mas o cliente ainda nao trouxe a sapatilha
+ * fisicamente. Fica "pausado": nao conta como pendente de conserto e nao entra no calculo
+ * de tempo medio de entrega ate que o status mude para RECEBIDO de fato. */
+export function isAwaitingDropoff(status: OrderStatus | string): boolean {
+  return status === "AGUARDANDO SAPATILHA";
+}
+
 /**
  * Prioridade operacional dentro do grupo "nao entregues" (menor numero = mais urgente).
  * PRONTO (esperando retirada) e EM_CONSERTO tem prioridade sobre RECEBIDO (ainda na fila de triagem).
- * CANCELADO fica por ultimo pois nao exige acao.
+ * CANCELADO fica por ultimo pois nao exige acao. AGUARDANDO SAPATILHA fica depois de CANCELADO
+ * pois nao exige acao imediata (esta esperando o cliente trazer o item).
  */
 const PENDING_PRIORITY: Record<string, number> = {
   PRONTO: 0,
   EM_CONSERTO: 1,
   RECEBIDO: 2,
   CANCELADO: 3,
+  "AGUARDANDO SAPATILHA": 4,
 };
 
 export function pendingPriority(status: OrderStatus | string): number {

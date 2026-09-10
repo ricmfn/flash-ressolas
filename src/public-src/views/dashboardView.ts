@@ -211,6 +211,7 @@ export function renderDashboardView(container: Element): DashboardViewHandle {
         el("div", { class: "stat-grid" }, [
           statCard("Total de pedidos", String(dashboard.totalOrders)),
           statCard("Pendentes", String(dashboard.pendingCount)),
+          statCard("Aguardando sapatilha", String(dashboard.awaitingDropoffCount)),
           statCard("Entregues", String(dashboard.deliveredCount)),
           statCard(
             "Tempo médio de entrega",

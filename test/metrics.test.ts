@@ -28,6 +28,23 @@ function makeOrder(overrides: Partial<Order> & { sheetRowIndex: number }): Order
   };
 }
 
+test("pedidos AGUARDANDO SAPATILHA nao contam como pendentes, mas aparecem em awaitingDropoffCount", () => {
+  const now = new Date("2026-06-15T12:00:00Z");
+  const orders = [
+    makeOrder({ sheetRowIndex: 2, status: "RECEBIDO" }),
+    makeOrder({ sheetRowIndex: 3, status: "EM_CONSERTO" }),
+    makeOrder({ sheetRowIndex: 4, status: "AGUARDANDO SAPATILHA" }),
+    makeOrder({ sheetRowIndex: 5, status: "AGUARDANDO SAPATILHA" }),
+    makeOrder({ sheetRowIndex: 6, status: "ENTREGUE - PAGA", deliveryDate: new Date("2026-06-10"), price: 80 }),
+  ];
+
+  const metrics = computeDashboardMetrics(orders, now);
+
+  assert.equal(metrics.pendingCount, 2);
+  assert.equal(metrics.awaitingDropoffCount, 2);
+  assert.equal(metrics.totalOrders, 5);
+});
+
 test("cortesias (ENTREGUE - NÃO PAGA) sao contadas no mes da data de ENTREGA, nao do pedido", () => {
   const now = new Date("2026-06-15T12:00:00Z");
   const orders = [

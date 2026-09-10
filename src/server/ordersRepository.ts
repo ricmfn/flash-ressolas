@@ -131,6 +131,39 @@ export class OrdersRepository {
   }
 
   /**
+   * Marca que a sapatilha chegou fisicamente na loja: muda o status de volta para RECEBIDO
+   * e RESETA o carimbo de data/hora (coluna B, indice fixo) para o momento atual. Usado para
+   * "despausar" um pedido que ficava em AGUARDANDO SAPATILHA (formulario preenchido, mas o
+   * cliente demorou pra trazer o item) — assim o tempo medio de entrega e o contador de
+   * pedidos da semana passam a contar a partir da entrada real, nao do preenchimento do
+   * formulario.
+   */
+  async markReceived(sheetRowIndex: number): Promise<Order> {
+    const freshRow = await this.readFreshRow(sheetRowIndex);
+    if (freshRow.length === 0) {
+      throw new Error(`Linha ${sheetRowIndex} não encontrada na planilha (pode ter sido alterada).`);
+    }
+    const targets = resolveWriteTargets(freshRow, sheetRowIndex);
+    const parsedFresh = parseOrderRow(freshRow, sheetRowIndex);
+
+    const newTimestamp = formatBRTimestamp(new Date());
+    // Coluna B (indice fixo 1, sempre "Carimbo de data/hora") — nunca varia de posicao.
+    await this.sheets.updateCell(config.ordersSheetName, `B${sheetRowIndex}`, newTimestamp, false);
+    await this.sheets.updateCell(
+      config.ordersSheetName,
+      `${columnIndexToA1(targets.statusCol)}${sheetRowIndex}`,
+      "RECEBIDO",
+      false,
+    );
+
+    await this.logEdit(parsedFresh.formId, sheetRowIndex, "B", newTimestamp);
+    await this.logEdit(parsedFresh.formId, sheetRowIndex, columnIndexToA1(targets.statusCol), "RECEBIDO");
+
+    const rowAfter = await this.readFreshRow(sheetRowIndex);
+    return parseOrderRow(rowAfter, sheetRowIndex);
+  }
+
+  /**
    * Adiciona uma linha nova (pedido chegado pela drop-off box) na MESMA aba dos pedidos
    * do formulário, respeitando as colunas fixas A..G (rowParser.ts) e usando a coluna H
    * (texto livre, igual a qualquer observação de formulário) pra registrar de qual caixa

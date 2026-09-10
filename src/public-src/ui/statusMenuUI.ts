@@ -7,6 +7,7 @@ import {
 import { el, clear } from "./dom.js";
 
 const STATUS_LABELS: Record<OrderStatus, string> = {
+  "AGUARDANDO SAPATILHA": "Aguardando sapatilha",
   RECEBIDO: "Recebido",
   EM_CONSERTO: "Em conserto",
   PRONTO: "Pronto",

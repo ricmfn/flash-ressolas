@@ -15,7 +15,7 @@ import { requireAuth, SESSION_COOKIE } from "./auth/middleware.js";
 import { orderToJSON } from "./serialize.js";
 import { uploadPublicPhoto } from "./google/driveClient.js";
 import { computeDashboardMetrics, summarizeExpenses } from "../shared/metrics.js";
-import { isValidStatus, isPending } from "../shared/status.js";
+import { isValidStatus, isPending, isAwaitingDropoff } from "../shared/status.js";
 import { resolveDropoffLabel } from "../shared/dropoffLocations.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -76,7 +76,11 @@ router.get("/api/orders", (ctx) => {
   const orders = sortedOrders.map(orderToJSON);
   sendJson(ctx.res, 200, {
     orders,
-    pendingCount: sortedOrders.filter((o) => isPending(o.status)).length,
+    // "Aguardando sapatilha" fica de fora do contador de pendentes: o formulario ja foi
+    // preenchido mas o cliente ainda nao trouxe o item fisicamente, entao nao e' um pedido
+    // esperando triagem/conserto de verdade ainda.
+    pendingCount: sortedOrders.filter((o) => isPending(o.status) && !isAwaitingDropoff(o.status)).length,
+    awaitingDropoffCount: sortedOrders.filter((o) => isAwaitingDropoff(o.status)).length,
     lastSyncedAt: syncService.store.getLastSyncedAt()?.toISOString() ?? null,
     lastSyncError: syncService.store.getLastSyncError(),
   });
@@ -118,6 +122,21 @@ router.post("/api/orders/:row/price", async (ctx) => {
   } catch (err) {
     // Nunca grava silenciosamente: erro de validação (ex: "?", data, texto) volta pro app.
     sendJson(ctx.res, 422, { error: err instanceof Error ? err.message : "Preço inválido." });
+  }
+});
+
+router.post("/api/orders/:row/receive", async (ctx) => {
+  if (!requireAuth(ctx)) return;
+  const sheetRowIndex = Number(ctx.params.row);
+  if (!Number.isInteger(sheetRowIndex) || sheetRowIndex < 2) {
+    return sendJson(ctx.res, 400, { error: "Linha inválida." });
+  }
+  try {
+    const updated = await ordersRepo.markReceived(sheetRowIndex);
+    syncService.store.upsertOne(updated);
+    sendJson(ctx.res, 200, { order: orderToJSON(updated) });
+  } catch (err) {
+    sendJson(ctx.res, 500, { error: err instanceof Error ? err.message : "Erro ao marcar como recebido." });
   }
 });
 

@@ -72,6 +72,7 @@ export interface OrderJSON {
 export interface OrdersResponse {
   orders: OrderJSON[];
   pendingCount: number;
+  awaitingDropoffCount: number;
   lastSyncedAt: string | null;
   lastSyncError: string | null;
 }
@@ -112,6 +113,7 @@ export interface DashboardMonthlyRevenue {
 export interface DashboardResponse {
   totalOrders: number;
   pendingCount: number;
+  awaitingDropoffCount: number;
   deliveredCount: number;
   totalRevenue: number;
   averageTicket: number | null;
@@ -154,6 +156,13 @@ export const api = {
     request<{ order: OrderJSON }>(`/api/orders/${sheetRowIndex}/price`, {
       method: "POST",
       body: JSON.stringify({ rawValue }),
+    }),
+  /** Marca que a sapatilha chegou fisicamente: volta o status pra RECEBIDO e reseta o
+   * carimbo de data/hora do pedido pro momento atual (pra nao inflar o tempo medio de
+   * entrega com o tempo que o pedido ficou "aguardando sapatilha"). */
+  markReceived: (sheetRowIndex: number) =>
+    request<{ order: OrderJSON }>(`/api/orders/${sheetRowIndex}/receive`, {
+      method: "POST",
     }),
   sync: () => request<SyncResponse>("/api/sync", { method: "POST" }),
   dashboard: () => request<DashboardResponse>("/api/dashboard"),

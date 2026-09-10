@@ -1,10 +1,11 @@
 import { averageDeliveryDays } from "./dates.js";
-import { isDeliveredStatus, isPending } from "./status.js";
+import { isAwaitingDropoff, isDeliveredStatus, isPending } from "./status.js";
 import type { Order } from "./types.js";
 
 export interface DashboardMetrics {
   totalOrders: number;
   pendingCount: number;
+  awaitingDropoffCount: number;
   deliveredCount: number;
   totalRevenue: number;
   averageTicket: number | null;
@@ -138,7 +139,11 @@ function computeWeeksOfMonth(orders: Order[], monthStart: Date): MonthlyRevenueP
 }
 
 export function computeDashboardMetrics(orders: Order[], now: Date = new Date()): DashboardMetrics {
-  const pendingCount = orders.filter((o) => isPending(o.status)).length;
+  // "Aguardando sapatilha" (formulario preenchido, mas o cliente ainda nao trouxe o item) nao
+  // conta como pendente de conserto — fica separado para nao inflar o numero de pedidos que
+  // realmente precisam de acao na oficina.
+  const pendingCount = orders.filter((o) => isPending(o.status) && !isAwaitingDropoff(o.status)).length;
+  const awaitingDropoffCount = orders.filter((o) => isAwaitingDropoff(o.status)).length;
   const delivered = orders.filter((o) => isDeliveredStatus(o.status));
   const deliveredCount = delivered.length;
 
@@ -196,6 +201,7 @@ export function computeDashboardMetrics(orders: Order[], now: Date = new Date())
   return {
     totalOrders: orders.length,
     pendingCount,
+    awaitingDropoffCount,
     deliveredCount,
     totalRevenue,
     courtesyMonthly,

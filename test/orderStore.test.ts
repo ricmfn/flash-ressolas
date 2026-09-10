@@ -113,6 +113,21 @@ test("pedidos nao entregues aparecem antes dos entregues, e cada grupo ordenado 
   assert.deepEqual(rows, [4, 5, 3, 2]);
 });
 
+test("AGUARDANDO SAPATILHA fica no grupo dos nao entregues, mas por ultimo (depois de CANCELADO)", () => {
+  const store = new OrderStore();
+  store.replaceAll([
+    makeOrder({ sheetRowIndex: 2, status: "ENTREGUE - PAGA", orderedAt: new Date("2026-01-01T00:00:00Z") }),
+    makeOrder({ sheetRowIndex: 3, status: "AGUARDANDO SAPATILHA", orderedAt: new Date("2026-01-05T00:00:00Z") }),
+    makeOrder({ sheetRowIndex: 4, status: "PRONTO", orderedAt: new Date("2026-01-03T00:00:00Z") }),
+    makeOrder({ sheetRowIndex: 5, status: "CANCELADO", orderedAt: new Date("2026-01-02T00:00:00Z") }),
+  ]);
+
+  const rows = store.listSorted().map((o) => o.sheetRowIndex);
+  // 4=PRONTO (prioridade 0), 5=CANCELADO (prioridade 3), 3=AGUARDANDO SAPATILHA (prioridade 4),
+  // entregues por ultimo (2).
+  assert.deepEqual(rows, [4, 5, 3, 2]);
+});
+
 test("dentro do mesmo grupo/prioridade, o pedido recebido mais recentemente aparece primeiro", () => {
   const store = new OrderStore();
   store.replaceAll([

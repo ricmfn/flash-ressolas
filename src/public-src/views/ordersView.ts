@@ -1,5 +1,5 @@
 import { api, type OrderJSON } from "../api/client.js";
-import { VALID_STATUSES, type OrderStatus } from "../../shared/status.js";
+import { VALID_STATUSES, isPending, isAwaitingDropoff, type OrderStatus } from "../../shared/status.js";
 import { el, clear } from "../ui/dom.js";
 import { createOrderCard } from "../ui/orderCard.js";
 import { statusLabel } from "../ui/statusMenuUI.js";
@@ -13,6 +13,7 @@ interface OrdersViewHandle {
 export function renderOrdersView(container: Element): OrdersViewHandle {
   let orders: OrderJSON[] = [];
   let pendingCount = 0;
+  let awaitingDropoffCount = 0;
   let lastSyncedAt: string | null = null;
   let loading = true;
   let syncing = false;
@@ -83,11 +84,20 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
     }).length;
   }
 
+  /** Recalcula os dois contadores a partir da lista local de pedidos — chamado sempre que um
+   * status muda localmente, pra nao esperar o proximo refresh periodico e nunca ficar
+   * dessincronizado do que a lista realmente mostra. */
+  function recomputeCounts(): void {
+    pendingCount = orders.filter((o) => isPending(o.status) && !isAwaitingDropoff(o.status)).length;
+    awaitingDropoffCount = orders.filter((o) => isAwaitingDropoff(o.status)).length;
+  }
+
   async function handleSaveStatus(sheetRowIndex: number, status: OrderStatus, deliveryDateISO: string | null) {
     const result = await api.updateStatus(sheetRowIndex, status, deliveryDateISO);
     if (result.ok) {
       const idx = orders.findIndex((o) => o.sheetRowIndex === sheetRowIndex);
       if (idx >= 0) orders[idx] = result.data.order;
+      recomputeCounts();
       // So o conteudo muda aqui (status/preco de um pedido) — nunca o toolbar, para nao
       // atrapalhar o usuario se ele estiver com texto digitado na busca.
       renderContent();
@@ -101,6 +111,18 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
     if (result.ok) {
       const idx = orders.findIndex((o) => o.sheetRowIndex === sheetRowIndex);
       if (idx >= 0) orders[idx] = result.data.order;
+      renderContent();
+      return { ok: true as const };
+    }
+    return { ok: false as const, error: result.error };
+  }
+
+  async function handleMarkReceived(sheetRowIndex: number) {
+    const result = await api.markReceived(sheetRowIndex);
+    if (result.ok) {
+      const idx = orders.findIndex((o) => o.sheetRowIndex === sheetRowIndex);
+      if (idx >= 0) orders[idx] = result.data.order;
+      recomputeCounts();
       renderContent();
       return { ok: true as const };
     }
@@ -185,6 +207,15 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
     const isSearching = searchTerm.trim() !== "";
 
     summary.appendChild(el("span", { class: "orders-summary__pending" }, [`${pendingCount} pendente(s)`]));
+    if (awaitingDropoffCount > 0) {
+      // So aparece quando ha pelo menos um pedido pausado — visibilidade pra nao "esquecer"
+      // desses pedidos so porque eles nao contam mais como pendentes.
+      summary.appendChild(
+        el("span", { class: "orders-summary__awaiting" }, [
+          `${awaitingDropoffCount} aguardando sapatilha`,
+        ]),
+      );
+    }
     summary.appendChild(
       el("span", { class: "orders-summary__week" }, [`${ordersThisWeekCount()} pedido(s) nesta semana`]),
     );
@@ -238,6 +269,7 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
           order,
           onSaveStatus: handleSaveStatus,
           onSavePrice: handleSavePrice,
+          onMarkReceived: handleMarkReceived,
         }),
       );
     }
@@ -261,6 +293,7 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
     if (result.ok) {
       orders = result.data.orders;
       pendingCount = result.data.pendingCount;
+      awaitingDropoffCount = result.data.awaitingDropoffCount;
       lastSyncedAt = result.data.lastSyncedAt;
       loadError = result.data.lastSyncError; // erro de sync de fundo, se houver, ainda mostra os dados
       hasLoadedOnce = true;

@@ -1,6 +1,6 @@
 import type { OrderJSON } from "../api/client.js";
 import type { OrderStatus } from "../../shared/status.js";
-import { el } from "./dom.js";
+import { el, clear } from "./dom.js";
 import { createStatusMenu } from "./statusMenuUI.js";
 import { createPriceEditor } from "./priceEditor.js";
 import { openPhotoViewer } from "./photoViewer.js";
@@ -20,9 +20,107 @@ interface OrderCardOptions {
     deliveryDateISO: string | null,
   ) => Promise<{ ok: boolean; error?: string }>;
   onSavePrice: (sheetRowIndex: number, rawValue: string) => Promise<{ ok: boolean; error?: string }>;
+  onMarkReceived: (sheetRowIndex: number) => Promise<{ ok: boolean; error?: string }>;
 }
 
-export function createOrderCard({ order, onSaveStatus, onSavePrice }: OrderCardOptions): HTMLElement {
+/**
+ * Botao "pausar" (some quando o pedido ainda esta em RECEBIDO, ou seja, antes de qualquer
+ * triagem/conserto) — usado quando o cliente preencheu o formulario mas ainda nao trouxe a
+ * sapatilha fisicamente. So muda o status pra AGUARDANDO SAPATILHA (reaproveita onSaveStatus,
+ * sem mexer no carimbo de data/hora — nao houve entrega real ainda).
+ */
+function createPauseTrigger(
+  order: OrderJSON,
+  onSaveStatus: OrderCardOptions["onSaveStatus"],
+): HTMLElement | null {
+  if (order.status !== "RECEBIDO") return null;
+
+  let saving = false;
+  let error: string | null = null;
+  const container = el("div", { class: "dropoff-pause-trigger" });
+
+  function render(): void {
+    clear(container);
+    const children: (Node | string | null)[] = [
+      el(
+        "button",
+        {
+          class: "btn btn--secondary btn--small",
+          disabled: saving,
+          onclick: async () => {
+            saving = true;
+            error = null;
+            render();
+            const result = await onSaveStatus(order.sheetRowIndex, "AGUARDANDO SAPATILHA", null);
+            saving = false;
+            if (!result.ok) {
+              error = result.error ?? "Não foi possível pausar o pedido.";
+              render();
+            }
+            // Em caso de sucesso o card inteiro e recriado no proximo render da lista.
+          },
+        },
+        [saving ? "Pausando…" : "Cliente ainda não trouxe a sapatilha"],
+      ),
+      error ? el("p", { class: "dropoff-pause__error" }, [error]) : null,
+    ];
+    container.appendChild(el("div", { class: "dropoff-pause-trigger__panel" }, children));
+  }
+
+  render();
+  return container;
+}
+
+/**
+ * Banner + botao "recebi a sapatilha" — aparece quando o pedido esta pausado (AGUARDANDO
+ * SAPATILHA). Chama onMarkReceived, que volta o status pra RECEBIDO E reseta o carimbo de
+ * data/hora pro momento atual (pra nao inflar o tempo medio de entrega).
+ */
+function createResumeBanner(
+  order: OrderJSON,
+  onMarkReceived: OrderCardOptions["onMarkReceived"],
+): HTMLElement | null {
+  if (order.status !== "AGUARDANDO SAPATILHA") return null;
+
+  let saving = false;
+  let error: string | null = null;
+  const container = el("div", { class: "dropoff-pause" });
+
+  function render(): void {
+    clear(container);
+    const children: (Node | string | null)[] = [
+      el("p", { class: "dropoff-pause__banner" }, [
+        "⏸ Aguardando o cliente trazer a sapatilha — não conta como pendente nem no tempo médio de entrega.",
+      ]),
+      error ? el("p", { class: "dropoff-pause__error" }, [error]) : null,
+      el(
+        "button",
+        {
+          class: "btn btn--primary btn--small",
+          disabled: saving,
+          onclick: async () => {
+            saving = true;
+            error = null;
+            render();
+            const result = await onMarkReceived(order.sheetRowIndex);
+            saving = false;
+            if (!result.ok) {
+              error = result.error ?? "Não foi possível marcar como recebido.";
+              render();
+            }
+          },
+        },
+        [saving ? "Salvando…" : "Recebi a sapatilha"],
+      ),
+    ];
+    container.appendChild(el("div", { class: "dropoff-pause__panel" }, children));
+  }
+
+  render();
+  return container;
+}
+
+export function createOrderCard({ order, onSaveStatus, onSavePrice, onMarkReceived }: OrderCardOptions): HTMLElement {
   const photoBlock = order.photo
     ? el("button", {
         class: "order-card__photo-btn",
@@ -78,6 +176,8 @@ export function createOrderCard({ order, onSaveStatus, onSavePrice }: OrderCardO
       order.statusInferred
         ? el("p", { class: "order-card__hint" }, ["Status não encontrado na planilha — tratado como Recebido."])
         : null,
+      createResumeBanner(order, onMarkReceived),
+      createPauseTrigger(order, onSaveStatus),
       el("div", { class: "order-card__row" }, [
         el("span", { class: "order-card__label" }, ["Preço final"]),
         priceEditor,

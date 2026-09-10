@@ -206,6 +206,11 @@ a {
   pointer-events: none;
 }
 
+.btn--small {
+  font-size: 0.8rem;
+  padding: 6px 10px;
+}
+
 /* ---------- Login ---------- */
 
 .login-screen {
@@ -317,6 +322,11 @@ a {
   color: var(--neon);
 }
 
+.orders-summary__awaiting {
+  font-weight: 700;
+  color: #E8DD2B;
+}
+
 .orders-summary__week {
   font-weight: 700;
   color: var(--success);
@@ -411,6 +421,37 @@ a {
   font-style: italic;
 }
 
+/* ---------- Pausa "aguardando sapatilha" ---------- */
+
+.dropoff-pause__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #3A3A20;
+  border: 1px solid #6B6B1E;
+  border-radius: 10px;
+  padding: 10px 12px;
+}
+
+.dropoff-pause__banner {
+  margin: 0;
+  font-size: 0.8rem;
+  color: #E8DD2B;
+}
+
+.dropoff-pause__error {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--danger);
+}
+
+.dropoff-pause-trigger__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
 .order-card__row {
   display: flex;
   align-items: center;
@@ -462,6 +503,7 @@ a {
   white-space: nowrap;
 }
 
+.status-badge--aguardando-sapatilha { background: #3A2E14; color: #F0A93A; }
 .status-badge--recebido { background: #3A3A20; color: #E8DD2B; }
 .status-badge--em-conserto { background: #1E3A5F; color: #6FB2FF; }
 .status-badge--pronto { background: #1E3A24; color: var(--success); }
