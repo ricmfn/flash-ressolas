@@ -90,11 +90,24 @@ declare module "node:crypto" {
   export function timingSafeEqual(a: Buffer | Uint8Array, b: Buffer | Uint8Array): boolean;
 }
 
+// ---------- Streams (fs.createReadStream / zlib.createGzip / etc.) ----------
+// `pipe` retorna o destino (igual ao Node real) pra permitir encadear:
+// createReadStream(...).pipe(createGzip()).pipe(res)
+interface NodePipeable {
+  pipe<T>(dest: T): T;
+}
+
 // ---------- node:fs ----------
 declare module "node:fs" {
   export function readFileSync(path: string, encoding: string): string;
   export function statSync(path: string): { isFile(): boolean; size: number; mtime: Date; mtimeMs: number };
-  export function createReadStream(path: string): { pipe(dest: unknown): void };
+  export function createReadStream(path: string): NodePipeable;
+}
+
+// ---------- node:zlib ----------
+declare module "node:zlib" {
+  export function gzipSync(input: Buffer): Buffer;
+  export function createGzip(): NodePipeable;
 }
 
 // ---------- node:path ----------
@@ -121,7 +134,7 @@ declare module "node:http" {
     headersSent: boolean;
     writeHead(status: number, headers?: Record<string, string | number>): void;
     setHeader(name: string, value: string): void;
-    end(body?: string): void;
+    end(body?: string | Buffer): void;
   }
   export interface Server {
     listen(port: number, cb?: () => void): void;

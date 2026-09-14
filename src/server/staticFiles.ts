@@ -1,4 +1,5 @@
 import { createReadStream, statSync } from "node:fs";
+import { createGzip } from "node:zlib";
 import { extname, join, normalize } from "node:path";
 import type { IncomingMessage, ServerResponse } from "node:http";
 
@@ -16,6 +17,16 @@ const MIME: Record<string, string> = {
   ".woff2": "font/woff2",
   ".woff": "font/woff",
 };
+
+// So comprime formatos de texto — imagens e fontes (.png/.jpg/.woff*) ja sao formatos
+// binarios comprimidos: rodar gzip neles so gasta CPU sem reduzir (ou ate aumenta) o tamanho.
+const COMPRESSIBLE_EXTS = new Set([".html", ".js", ".css", ".json", ".webmanifest", ".svg"]);
+
+function acceptsGzip(req: IncomingMessage): boolean {
+  const header = req.headers["accept-encoding"];
+  if (!header) return false;
+  return header.split(",").some((enc) => enc.trim().split(";")[0] === "gzip");
+}
 
 /**
  * Serve arquivos estaticos de `root`. index.html e sw.js NUNCA sao cacheados (o app
@@ -46,14 +57,26 @@ export function serveStatic(root: string, req: IncomingMessage, res: ServerRespo
   const ext = extname(filePath);
   const mime = MIME[ext] ?? "application/octet-stream";
   const noCache = relative === "/index.html" || relative === "/sw.js";
+  // Content-Length so pode ser o tamanho do arquivo em disco quando a resposta sai sem
+  // compressao: comprimida, o tamanho final so e conhecido depois — por isso omitimos o
+  // cabecalho nesse caso (Node usa Transfer-Encoding: chunked automaticamente).
+  const gzip = COMPRESSIBLE_EXTS.has(ext) && acceptsGzip(req);
 
   if (noCache) {
-    res.writeHead(200, {
+    const headers: Record<string, string | number> = {
       "Content-Type": mime,
-      "Content-Length": stat.size,
       "Cache-Control": "no-cache, no-store, must-revalidate",
-    });
-    createReadStream(filePath).pipe(res);
+    };
+    if (gzip) {
+      headers["Content-Encoding"] = "gzip";
+      headers.Vary = "Accept-Encoding";
+      res.writeHead(200, headers);
+      createReadStream(filePath).pipe(createGzip()).pipe(res);
+    } else {
+      headers["Content-Length"] = stat.size;
+      res.writeHead(200, headers);
+      createReadStream(filePath).pipe(res);
+    }
     return true;
   }
 
@@ -65,13 +88,21 @@ export function serveStatic(root: string, req: IncomingMessage, res: ServerRespo
     return true;
   }
 
-  res.writeHead(200, {
+  const headers: Record<string, string | number> = {
     "Content-Type": mime,
-    "Content-Length": stat.size,
     "Cache-Control": "no-cache",
     ETag: etag,
     "Last-Modified": stat.mtime.toUTCString(),
-  });
-  createReadStream(filePath).pipe(res);
+  };
+  if (gzip) {
+    headers["Content-Encoding"] = "gzip";
+    headers.Vary = "Accept-Encoding";
+    res.writeHead(200, headers);
+    createReadStream(filePath).pipe(createGzip()).pipe(res);
+  } else {
+    headers["Content-Length"] = stat.size;
+    res.writeHead(200, headers);
+    createReadStream(filePath).pipe(res);
+  }
   return true;
 }
