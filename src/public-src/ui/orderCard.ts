@@ -1,5 +1,6 @@
 import type { OrderJSON } from "../api/client.js";
 import type { OrderStatus } from "../../shared/status.js";
+import { orderCardColorGroup } from "../../shared/status.js";
 import { el, clear } from "./dom.js";
 import { createStatusMenu } from "./statusMenuUI.js";
 import { createPriceEditor } from "./priceEditor.js";
@@ -162,7 +163,13 @@ export function createOrderCard({ order, onSaveStatus, onSavePrice, onMarkReceiv
     onSave: (rawValue) => onSavePrice(order.sheetRowIndex, rawValue),
   });
 
-  return el("article", { class: "order-card" }, [
+  // Cor de fundo clarinha (baixa opacidade) por grupo de status: amarelo = recebido/em
+  // conserto, verde = pronto, azul = entregue. Cancelado/aguardando sapatilha ficam sem
+  // cor especial (null -> nenhuma classe extra).
+  const colorGroup = orderCardColorGroup(order.status);
+  const cardClass = colorGroup ? `order-card order-card--${colorGroup}` : "order-card";
+
+  return el("article", { class: cardClass }, [
     photoBlock,
     el("div", { class: "order-card__body" }, [
       el("div", { class: "order-card__header" }, [

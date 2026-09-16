@@ -1,4 +1,4 @@
-import { isPending, pendingPriority } from "./status.js";
+import { isPending, pendingPriority, pendingSortsOldestFirst } from "./status.js";
 import type { Order } from "./types.js";
 
 /**
@@ -47,9 +47,12 @@ export class OrderStore {
   }
 
   /**
-   * Lista ordenada: pedidos NAO entregues antes dos entregues; dentro de cada grupo,
-   * por prioridade operacional e depois por data do pedido (mais recente primeiro,
-   * para que quem acabou de chegar sempre apareca no topo da tela).
+   * Lista ordenada pela prioridade real de trabalho: pedidos NAO entregues antes dos
+   * entregues; dentro do grupo nao entregue, por prioridade operacional (RECEBIDO +
+   * EM_CONSERTO primeiro, depois PRONTO, depois CANCELADO/AGUARDANDO SAPATILHA).
+   * Dentro de RECEBIDO/EM_CONSERTO/PRONTO a ordem e FIFO (pedido mais antigo primeiro —
+   * e o proximo que precisa ser resolvido). Nos demais grupos (cancelado/aguardando
+   * sapatilha e entregues) o pedido mais recente aparece primeiro, como sempre foi.
    */
   listSorted(): Order[] {
     const all = Array.from(this.byRow.values());
@@ -61,6 +64,13 @@ export class OrderStore {
       if (aPending && bPending) {
         const prio = pendingPriority(a.status) - pendingPriority(b.status);
         if (prio !== 0) return prio;
+
+        if (pendingSortsOldestFirst(a.status)) {
+          // Fila FIFO: sem data conhecida vai pro final da fila (nunca "fura fila" por acaso).
+          const aFifo = a.orderedAt?.getTime() ?? Number.POSITIVE_INFINITY;
+          const bFifo = b.orderedAt?.getTime() ?? Number.POSITIVE_INFINITY;
+          return aFifo - bFifo;
+        }
       }
 
       // Sem data conhecida vai para o final do grupo (nunca "furando fila" por acaso).

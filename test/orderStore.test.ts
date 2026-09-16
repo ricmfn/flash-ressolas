@@ -108,9 +108,22 @@ test("pedidos nao entregues aparecem antes dos entregues, e cada grupo ordenado 
   ]);
 
   const rows = store.listSorted().map((o) => o.sheetRowIndex);
-  // Nao entregues primeiro (4=PRONTO prioridade 0, 5=EM_CONSERTO prioridade 1, 3=RECEBIDO prioridade 2),
-  // entregues por ultimo (2).
-  assert.deepEqual(rows, [4, 5, 3, 2]);
+  // Nao entregues primeiro, na ordem de prioridade real de trabalho: RECEBIDO+EM_CONSERTO
+  // (prioridade 0) em fila FIFO por data — 5 (01-02) antes de 3 (01-05) — depois PRONTO
+  // (prioridade 1, so o 4), entregues por ultimo (2).
+  assert.deepEqual(rows, [5, 3, 4, 2]);
+});
+
+test("RECEBIDO e EM_CONSERTO formam uma unica fila FIFO misturada (mesma prioridade, so a data manda)", () => {
+  const store = new OrderStore();
+  store.replaceAll([
+    makeOrder({ sheetRowIndex: 2, status: "RECEBIDO", orderedAt: new Date("2026-01-10T00:00:00Z") }),
+    makeOrder({ sheetRowIndex: 3, status: "EM_CONSERTO", orderedAt: new Date("2026-01-03T00:00:00Z") }),
+    makeOrder({ sheetRowIndex: 4, status: "RECEBIDO", orderedAt: new Date("2026-01-07T00:00:00Z") }),
+  ]);
+
+  const rows = store.listSorted().map((o) => o.sheetRowIndex);
+  assert.deepEqual(rows, [3, 4, 2]);
 });
 
 test("AGUARDANDO SAPATILHA fica no grupo dos nao entregues, mas por ultimo (depois de CANCELADO)", () => {
@@ -123,12 +136,13 @@ test("AGUARDANDO SAPATILHA fica no grupo dos nao entregues, mas por ultimo (depo
   ]);
 
   const rows = store.listSorted().map((o) => o.sheetRowIndex);
-  // 4=PRONTO (prioridade 0), 5=CANCELADO (prioridade 3), 3=AGUARDANDO SAPATILHA (prioridade 4),
-  // entregues por ultimo (2).
+  // 4=PRONTO (prioridade 1), 5=CANCELADO (prioridade 2), 3=AGUARDANDO SAPATILHA (prioridade 3),
+  // entregues por ultimo (2). Cancelado/aguardando nao sao FIFO, entao a ordem entre eles
+  // segue "mais recente primeiro" como sempre foi.
   assert.deepEqual(rows, [4, 5, 3, 2]);
 });
 
-test("dentro do mesmo grupo/prioridade, o pedido recebido mais recentemente aparece primeiro", () => {
+test("dentro de RECEBIDO/EM_CONSERTO/PRONTO, o pedido mais ANTIGO aparece primeiro (fila FIFO de trabalho)", () => {
   const store = new OrderStore();
   store.replaceAll([
     makeOrder({ sheetRowIndex: 2, status: "RECEBIDO", orderedAt: new Date("2026-01-01T00:00:00Z") }),
@@ -138,7 +152,8 @@ test("dentro do mesmo grupo/prioridade, o pedido recebido mais recentemente apar
   ]);
 
   const rows = store.listSorted().map((o) => o.sheetRowIndex);
-  assert.deepEqual(rows, [3, 4, 2, 5]);
+  // Mais antigo primeiro (2, depois 4, depois 3); sem data conhecida nunca fura fila (5 por ultimo).
+  assert.deepEqual(rows, [2, 4, 3, 5]);
 });
 
 test("no grupo dos entregues, a entrega mais recente tambem aparece primeiro", () => {

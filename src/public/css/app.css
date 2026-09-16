@@ -354,6 +354,21 @@ a {
   padding: 12px;
 }
 
+/* Cor de fundo clarinha por grupo de status, sobreposta ao fundo escuro padrao do card
+   (por isso o gradiente: uma camada de cor baixa opacidade em cima de --bg-card, nao uma
+   cor solida — mantem o tema escuro e o texto legivel). */
+.order-card--recebido {
+  background: linear-gradient(rgba(232, 255, 43, 0.14), rgba(232, 255, 43, 0.14)), var(--bg-card);
+}
+
+.order-card--pronto {
+  background: linear-gradient(rgba(74, 222, 128, 0.14), rgba(74, 222, 128, 0.14)), var(--bg-card);
+}
+
+.order-card--entregue {
+  background: linear-gradient(rgba(96, 165, 250, 0.14), rgba(96, 165, 250, 0.14)), var(--bg-card);
+}
+
 .order-card__photo-btn {
   padding: 0;
   border: none;
