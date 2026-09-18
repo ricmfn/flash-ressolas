@@ -13,6 +13,28 @@ function formatDate(iso: string | null): string {
   return d.toLocaleDateString("pt-BR");
 }
 
+/**
+ * Badge "X dias" no canto superior direito do card — so aparece pra pedidos ainda em
+ * triagem/conserto (RECEBIDO/EM_CONSERTO), pra deixar visivel de longe ha quanto tempo
+ * cada par esta esperando. Conta em dias corridos de calendario (nao horas fracionadas):
+ * o mesmo dia da entrada mostra "0 dias", o dia seguinte "1 dia", etc.
+ */
+function createDaysBadge(order: OrderJSON): HTMLElement | null {
+  if (order.status !== "RECEBIDO" && order.status !== "EM_CONSERTO") return null;
+  if (!order.orderedAt) return null;
+
+  const ordered = new Date(order.orderedAt);
+  if (Number.isNaN(ordered.getTime())) return null;
+
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const orderedDay = new Date(ordered.getFullYear(), ordered.getMonth(), ordered.getDate());
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.max(0, Math.round((today.getTime() - orderedDay.getTime()) / MS_PER_DAY));
+
+  return el("span", { class: "order-card__days-badge" }, [`${days} dia${days === 1 ? "" : "s"}`]);
+}
+
 interface OrderCardOptions {
   order: OrderJSON;
   onSaveStatus: (
@@ -168,13 +190,14 @@ export function createOrderCard({ order, onSaveStatus, onSavePrice, onMarkReceiv
   // cor especial (null -> nenhuma classe extra).
   const colorGroup = orderCardColorGroup(order.status);
   const cardClass = colorGroup ? `order-card order-card--${colorGroup}` : "order-card";
+  const daysBadge = createDaysBadge(order);
 
   return el("article", { class: cardClass }, [
     photoBlock,
     el("div", { class: "order-card__body" }, [
       el("div", { class: "order-card__header" }, [
         el("h3", { class: "order-card__name" }, [order.customerName || "(sem nome)"]),
-        statusMenu,
+        el("div", { class: "order-card__header-right" }, [daysBadge, statusMenu]),
       ]),
       el("p", { class: "order-card__meta" }, [
         `${order.shoeModel || "Modelo não informado"} · Tam. ${order.shoeSize || "—"}`,

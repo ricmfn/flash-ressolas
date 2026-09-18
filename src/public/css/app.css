@@ -411,6 +411,25 @@ a {
   gap: 8px;
 }
 
+.order-card__header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* "X dias" no canto superior direito do card (RECEBIDO/EM_CONSERTO) — fundo escuro
+   semi-transparente pra continuar legivel em cima de qualquer cor de card. */
+.order-card__days-badge {
+  background: rgba(11, 11, 12, 0.45);
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 3px 9px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
 .order-card__name {
   margin: 0;
   font-size: 1rem;
