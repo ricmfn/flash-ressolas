@@ -1,4 +1,4 @@
-import { averageDeliveryDays } from "./dates.js";
+import { averageDeliveryDays, parseFlexibleDate } from "./dates.js";
 import { isAwaitingDropoff, isDeliveredStatus, isPending } from "./status.js";
 import type { Order } from "./types.js";
 
@@ -90,7 +90,7 @@ function daysInMonth(year: number, monthIndex0: number): number {
  * atualizacao em lote), usa a data de ENTRADA do pedido em vez dela, pois essa data de entrega
  * especifica nao reflete uma entrega/pagamento real.
  */
-function revenueRefDate(o: Order): Date | null {
+export function revenueRefDate(o: Order): Date | null {
   if (o.deliveryDate !== null && isoDate(o.deliveryDate) === UNRELIABLE_BULK_DELIVERY_DATE_ISO) {
     return o.orderedAt;
   }
@@ -237,4 +237,119 @@ export function summarizeExpenses(rows: ExpenseRow[]): ExpensesSummary {
     total += row.value;
   }
   return { rows, totalByCategory, total };
+}
+
+/**
+ * Categorias (coluna "Tipo" da aba Financeiro) tratadas como custo VARIAVEL de producao —
+ * o que e efetivamente consumido pra ressolar um par (formas, materiais, ferramentas e
+ * insumos). Usado pra calcular o "custo variavel por par". Combinado com o Ricardo: segue
+ * a mesma logica que ele ja usava informalmente (so material entra na conta por par) —
+ * equipamento, treinamento e transporte ficam de fora por serem custo fixo/investimento,
+ * nao algo que cresce proporcionalmente a cada par ressolado.
+ *
+ * Ajustavel: se novas categorias forem usadas na planilha, so incluir/tirar daqui.
+ */
+export const VARIABLE_EXPENSE_CATEGORIES = new Set<string>([
+  "Fôrmas",
+  "Materiais",
+  "Ferramentas e Insumos",
+]);
+
+export interface ProfitabilityMonthPoint {
+  monthISO: string;
+  revenue: number;
+  expenses: number;
+  profit: number;
+}
+
+export interface Profitability {
+  /** Faturamento total (pedidos ENTREGUE - PAGA) desde o inicio. */
+  totalRevenue: number;
+  /** Soma de TODAS as despesas da aba Financeiro (variavel + fixo/investimento). */
+  totalExpenses: number;
+  /** totalRevenue - totalExpenses. */
+  profit: number;
+  /** profit / totalRevenue em %, ou null se nao houve faturamento ainda. */
+  marginPct: number | null;
+  /** Numero de pares ENTREGUE - PAGA (usado como denominador do custo por par). */
+  pairsDelivered: number;
+  variableExpenses: number;
+  fixedExpenses: number;
+  /** variableExpenses / pairsDelivered — custo so de material por par. */
+  variableCostPerPair: number | null;
+  /** totalExpenses / pairsDelivered — custo "tudo incluso" por par, ate agora. */
+  totalCostPerPair: number | null;
+  /** Ultimos 12 meses (mes atual por ultimo), faturamento x despesas lancadas naquele mes. */
+  monthly: ProfitabilityMonthPoint[];
+}
+
+const PROFITABILITY_MONTHS_WINDOW = 12;
+
+export function computeProfitability(
+  orders: Order[],
+  expenseRows: ExpenseRow[],
+  now: Date = new Date(),
+): Profitability {
+  const paidDelivered = orders.filter((o) => o.status === "ENTREGUE - PAGA" && o.price !== null);
+  const totalRevenue = paidDelivered.reduce((sum, o) => sum + (o.price ?? 0), 0);
+  const pairsDelivered = paidDelivered.length;
+
+  let totalExpenses = 0;
+  let variableExpenses = 0;
+  let fixedExpenses = 0;
+  for (const row of expenseRows) {
+    if (row.value === null) continue;
+    totalExpenses += row.value;
+    if (VARIABLE_EXPENSE_CATEGORIES.has(row.category)) {
+      variableExpenses += row.value;
+    } else {
+      fixedExpenses += row.value;
+    }
+  }
+
+  const profit = totalRevenue - totalExpenses;
+  const marginPct = totalRevenue > 0 ? (profit / totalRevenue) * 100 : null;
+  const variableCostPerPair = pairsDelivered > 0 ? variableExpenses / pairsDelivered : null;
+  const totalCostPerPair = pairsDelivered > 0 ? totalExpenses / pairsDelivered : null;
+
+  // Agrupamento mensal (ultimos 12 meses, mes atual por ultimo) — faturamento pela mesma
+  // data de referencia usada no resto do dashboard (revenueRefDate), despesas pela data
+  // lancada na coluna "Data" da aba Financeiro.
+  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthly: ProfitabilityMonthPoint[] = [];
+  for (let i = PROFITABILITY_MONTHS_WINDOW - 1; i >= 0; i--) {
+    const monthStart = new Date(currentMonthStart.getFullYear(), currentMonthStart.getMonth() - i, 1);
+    const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 1);
+    const monthISO = `${monthStart.getFullYear()}-${String(monthStart.getMonth() + 1).padStart(2, "0")}`;
+
+    const revenue = paidDelivered
+      .filter((o) => {
+        const refDate = revenueRefDate(o);
+        return refDate !== null && refDate >= monthStart && refDate < monthEnd;
+      })
+      .reduce((sum, o) => sum + (o.price ?? 0), 0);
+
+    const expenses = expenseRows
+      .filter((row) => {
+        if (row.value === null) return false;
+        const d = parseFlexibleDate(row.date);
+        return d !== null && d >= monthStart && d < monthEnd;
+      })
+      .reduce((sum, row) => sum + (row.value ?? 0), 0);
+
+    monthly.push({ monthISO, revenue, expenses, profit: revenue - expenses });
+  }
+
+  return {
+    totalRevenue,
+    totalExpenses,
+    profit,
+    marginPct,
+    pairsDelivered,
+    variableExpenses,
+    fixedExpenses,
+    variableCostPerPair,
+    totalCostPerPair,
+    monthly,
+  };
 }

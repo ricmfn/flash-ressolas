@@ -63,13 +63,22 @@ export class SheetsClient {
 
   /** Adiciona uma linha ao final de uma aba (usado so para o log de auditoria "Edições"). */
   async appendRow(sheetName: string, row: (string | number)[]): Promise<void> {
+    await this.appendRows(sheetName, [row]);
+  }
+
+  /**
+   * Adiciona varias linhas de uma vez ao final de uma aba, numa unica chamada (usado pela
+   * carga inicial da aba "Financeiro" - ver expensesSeed.ts/seedExpensesIfEmpty).
+   */
+  async appendRows(sheetName: string, rows: (string | number)[][]): Promise<void> {
+    if (rows.length === 0) return;
     const range = `${sheetName}!A1`;
     const url = `${BASE}/${this.spreadsheetId}/values/${encodeURIComponent(range)}:append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS`;
     const res = await fetch(url, {
       method: "POST",
       headers: await authHeaders(this.account),
-      body: JSON.stringify({ values: [row] }),
+      body: JSON.stringify({ values: rows }),
     });
-    if (!res.ok) throw new Error(`Erro ao adicionar linha em "${sheetName}": ${await parseErrorBody(res)}`);
+    if (!res.ok) throw new Error(`Erro ao adicionar linhas em "${sheetName}": ${await parseErrorBody(res)}`);
   }
 }

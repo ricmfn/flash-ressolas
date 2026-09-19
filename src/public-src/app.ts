@@ -3,8 +3,9 @@ import { el, clear } from "./ui/dom.js";
 import { renderLoginView } from "./views/loginView.js";
 import { renderOrdersView } from "./views/ordersView.js";
 import { renderDashboardView } from "./views/dashboardView.js";
+import { renderRubberView } from "./views/rubberView.js";
 
-type View = "orders" | "dashboard";
+type View = "orders" | "dashboard" | "borrachas";
 
 /** UNICO timer de auto-refresh do lado do cliente (complementa o auto-sync do servidor,
  * que roda no backend independentemente da tela estar aberta). */
@@ -20,6 +21,7 @@ function startApp(): void {
   let username: string | null = null;
   let ordersHandle: ReturnType<typeof renderOrdersView> | null = null;
   let dashboardHandle: ReturnType<typeof renderDashboardView> | null = null;
+  let rubberHandle: ReturnType<typeof renderRubberView> | null = null;
 
   function stopClientRefresh(): void {
     if (clientRefreshTimer !== null) {
@@ -32,7 +34,8 @@ function startApp(): void {
     stopClientRefresh(); // garante um UNICO timer ativo por vez
     clientRefreshTimer = setInterval(() => {
       if (currentView === "orders") void ordersHandle?.refresh(false);
-      else void dashboardHandle?.refresh();
+      else if (currentView === "dashboard") void dashboardHandle?.refresh();
+      else void rubberHandle?.refresh();
     }, CLIENT_REFRESH_INTERVAL_MS);
   }
 
@@ -44,6 +47,7 @@ function startApp(): void {
       el("nav", { class: "app-nav" }, [
         navButton("orders", "Pedidos"),
         navButton("dashboard", "Dashboard"),
+        navButton("borrachas", "Borrachas"),
       ]),
       el(
         "button",
@@ -65,12 +69,15 @@ function startApp(): void {
     appRoot.appendChild(header);
     appRoot.appendChild(main);
 
+    ordersHandle = null;
+    dashboardHandle = null;
+    rubberHandle = null;
     if (currentView === "orders") {
       ordersHandle = renderOrdersView(main);
-      dashboardHandle = null;
-    } else {
+    } else if (currentView === "dashboard") {
       dashboardHandle = renderDashboardView(main);
-      ordersHandle = null;
+    } else {
+      rubberHandle = renderRubberView(main);
     }
   }
 

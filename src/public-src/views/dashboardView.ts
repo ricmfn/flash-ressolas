@@ -1,4 +1,4 @@
-import { api, type DashboardResponse, type ExpensesResponse } from "../api/client.js";
+import { api, type DashboardResponse, type ExpensesResponse, type ProfitabilityResponse } from "../api/client.js";
 import { formatBRL } from "../../shared/currency.js";
 import { el, clear } from "../ui/dom.js";
 
@@ -161,6 +161,41 @@ function monthlyRevenuePanel(
   ]);
 }
 
+function formatPct(value: number | null): string {
+  if (value === null) return "—";
+  return `${value.toFixed(1)}%`;
+}
+
+function profitabilityMonthlyTable(profitability: ProfitabilityResponse): HTMLElement {
+  // Mostra so os meses que ja tiveram faturamento ou despesa, do mais recente pro mais
+  // antigo — os ultimos 12 meses inteiros ficariam quase todos vazios no inicio do negocio.
+  const monthsWithData = profitability.monthly.filter((m) => m.revenue !== 0 || m.expenses !== 0);
+  const months = (monthsWithData.length > 0 ? monthsWithData : profitability.monthly).slice().reverse();
+
+  return el("table", { class: "weeks-table" }, [
+    el("thead", {}, [
+      el("tr", {}, [
+        el("th", {}, ["Mês"]),
+        el("th", {}, ["Faturamento"]),
+        el("th", {}, ["Despesas"]),
+        el("th", {}, ["Lucro"]),
+      ]),
+    ]),
+    el(
+      "tbody",
+      {},
+      months.map((m) =>
+        el("tr", {}, [
+          el("td", {}, [monthLabel(m.monthISO)]),
+          el("td", {}, [formatBRL(m.revenue)]),
+          el("td", {}, [formatBRL(m.expenses)]),
+          el("td", { class: m.profit < 0 ? "profit-negative" : "profit-positive" }, [formatBRL(m.profit)]),
+        ]),
+      ),
+    ),
+  ]);
+}
+
 function statCardPlain(label: string, value: string): HTMLElement {
   return el("div", { class: "stat-card" }, [
     el("span", { class: "stat-card__label" }, [label]),
@@ -171,6 +206,7 @@ function statCardPlain(label: string, value: string): HTMLElement {
 export function renderDashboardView(container: Element): DashboardViewHandle {
   let dashboard: DashboardResponse | null = null;
   let expenses: ExpensesResponse | null = null;
+  let profitability: ProfitabilityResponse | null = null;
   let loading = true;
   let error: string | null = null;
   // Indice selecionado dentro de dashboard.monthlyRevenue (historico de faturamento mensal).
@@ -285,6 +321,43 @@ export function renderDashboardView(container: Element): DashboardViewHandle {
             ]),
       ]),
     );
+
+    // ---------- Rentabilidade e custo por par ----------
+    if (profitability) {
+      const hasPairs = profitability.pairsDelivered > 0;
+      root.appendChild(
+        el("section", { class: "dashboard-section" }, [
+          el("h2", {}, ["Rentabilidade"]),
+          el("div", { class: "stat-grid" }, [
+            statCard("Faturamento total", formatBRL(profitability.totalRevenue)),
+            statCard("Despesas totais", formatBRL(profitability.totalExpenses)),
+            statCard(
+              "Lucro acumulado",
+              formatBRL(profitability.profit),
+              `margem: ${formatPct(profitability.marginPct)}`,
+            ),
+            statCard("Pares entregues e pagos", String(profitability.pairsDelivered)),
+          ]),
+          el("h3", { class: "dashboard-subheading" }, ["Custo por par ressolado"]),
+          el("div", { class: "stat-grid" }, [
+            statCard(
+              "Custo variável por par (só material)",
+              hasPairs ? formatBRL(profitability.variableCostPerPair) : "—",
+              hasPairs ? undefined : "ainda sem pares entregues e pagos",
+            ),
+            statCard(
+              "Custo total por par (tudo incluso, até agora)",
+              hasPairs ? formatBRL(profitability.totalCostPerPair) : "—",
+              hasPairs
+                ? "inclui equipamento, treinamento e transporte, diluídos pelos pares feitos até agora"
+                : "ainda sem pares entregues e pagos",
+            ),
+          ]),
+          el("h3", { class: "dashboard-subheading" }, ["Rentabilidade por mês"]),
+          profitabilityMonthlyTable(profitability),
+        ]),
+      );
+    }
   }
 
   function statCard(label: string, value: string, sub?: string): HTMLElement {
@@ -298,7 +371,7 @@ export function renderDashboardView(container: Element): DashboardViewHandle {
   async function refresh(): Promise<void> {
     loading = true;
     render();
-    const [dashRes, expRes] = await Promise.all([api.dashboard(), api.expenses()]);
+    const [dashRes, expRes, profRes] = await Promise.all([api.dashboard(), api.expenses(), api.profitability()]);
     loading = false;
     if (dashRes.ok) {
       dashboard = dashRes.data;
@@ -308,6 +381,9 @@ export function renderDashboardView(container: Element): DashboardViewHandle {
     }
     if (expRes.ok) {
       expenses = expRes.data;
+    }
+    if (profRes.ok) {
+      profitability = profRes.data;
     }
     render();
   }

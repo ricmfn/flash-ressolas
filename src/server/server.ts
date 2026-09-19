@@ -8,13 +8,17 @@ import { serveStatic } from "./staticFiles.js";
 import { SheetsClient } from "./google/sheetsClient.js";
 import { OrdersRepository } from "./ordersRepository.js";
 import { ExpensesRepository } from "./expensesRepository.js";
+import { EXPENSES_SEED } from "./expensesSeed.js";
+import { RubberRepository } from "./rubberRepository.js";
+import { RUBBER_SEED } from "./rubberSeed.js";
 import { SyncService } from "./syncService.js";
 import { verifyPassword } from "./auth/password.js";
 import { createSessionToken } from "./auth/session.js";
 import { requireAuth, SESSION_COOKIE } from "./auth/middleware.js";
 import { orderToJSON } from "./serialize.js";
 import { uploadPublicPhoto } from "./google/driveClient.js";
-import { computeDashboardMetrics, summarizeExpenses } from "../shared/metrics.js";
+import { computeDashboardMetrics, computeProfitability, summarizeExpenses } from "../shared/metrics.js";
+import { summarizeRubber } from "../shared/rubber.js";
 import { isValidStatus, isPending, isAwaitingDropoff } from "../shared/status.js";
 import { resolveDropoffLabel } from "../shared/dropoffLocations.js";
 
@@ -29,6 +33,7 @@ const account = loadServiceAccount();
 const sheets = new SheetsClient(account, config.spreadsheetId);
 const ordersRepo = new OrdersRepository(sheets);
 const expensesRepo = new ExpensesRepository(sheets);
+const rubberRepo = new RubberRepository(sheets);
 const syncService = new SyncService(ordersRepo, config.autoSyncIntervalMs);
 
 const router = new Router();
@@ -172,6 +177,89 @@ router.get("/api/expenses", async (ctx) => {
   }
 });
 
+router.get("/api/profitability", async (ctx) => {
+  if (!requireAuth(ctx)) return;
+  try {
+    const orders = syncService.store.listSorted();
+    const expenseRows = await expensesRepo.readAll();
+    sendJson(ctx, 200, computeProfitability(orders, expenseRows));
+  } catch (err) {
+    sendJson(ctx, 502, { error: err instanceof Error ? err.message : "Erro ao calcular rentabilidade." });
+  }
+});
+
+// ---------- Borrachas (estoque de folhas de borracha) ----------
+
+router.get("/api/rubber", async (ctx) => {
+  if (!requireAuth(ctx)) return;
+  try {
+    const sheets_ = await rubberRepo.readAll();
+    sendJson(ctx, 200, summarizeRubber(sheets_));
+  } catch (err) {
+    sendJson(ctx, 502, { error: err instanceof Error ? err.message : "Erro ao ler borrachas." });
+  }
+});
+
+router.post("/api/rubber", async (ctx) => {
+  if (!requireAuth(ctx)) return;
+  const body = await readJsonBody<{
+    date?: string;
+    brand?: string;
+    supplier?: string;
+    value?: number | string | null;
+    percentRemaining?: number | string | null;
+    notes?: string;
+  }>(ctx.req);
+  if (!body.brand || !body.brand.trim()) {
+    return sendJson(ctx, 400, { error: "Informe a marca/tipo da borracha." });
+  }
+  try {
+    const parsedValue =
+      body.value === null || body.value === undefined || body.value === "" ? null : Number(body.value);
+    if (parsedValue !== null && !Number.isFinite(parsedValue)) {
+      return sendJson(ctx, 422, { error: "Valor inválido." });
+    }
+    const parsedPercent =
+      body.percentRemaining === null || body.percentRemaining === undefined || body.percentRemaining === ""
+        ? null
+        : Number(body.percentRemaining);
+    if (parsedPercent !== null && (!Number.isFinite(parsedPercent) || parsedPercent < 0 || parsedPercent > 100)) {
+      return sendJson(ctx, 422, { error: "Percentual restante precisa estar entre 0 e 100." });
+    }
+    await rubberRepo.addSheet({
+      date: (body.date ?? "").trim(),
+      brand: body.brand.trim(),
+      supplier: (body.supplier ?? "").trim(),
+      value: parsedValue,
+      percentRemaining: parsedPercent,
+      notes: (body.notes ?? "").trim(),
+    });
+    const sheets_ = await rubberRepo.readAll();
+    sendJson(ctx, 200, summarizeRubber(sheets_));
+  } catch (err) {
+    sendJson(ctx, 422, { error: err instanceof Error ? err.message : "Erro ao adicionar folha." });
+  }
+});
+
+router.post("/api/rubber/:row/percent", async (ctx) => {
+  if (!requireAuth(ctx)) return;
+  const sheetRowIndex = Number(ctx.params.row);
+  if (!Number.isInteger(sheetRowIndex) || sheetRowIndex < 2) {
+    return sendJson(ctx, 400, { error: "Linha inválida." });
+  }
+  const body = await readJsonBody<{ percent?: number }>(ctx.req);
+  if (body.percent === undefined || !Number.isFinite(body.percent)) {
+    return sendJson(ctx, 400, { error: "Informe o percentual restante." });
+  }
+  try {
+    await rubberRepo.updatePercent(sheetRowIndex, body.percent);
+    const sheets_ = await rubberRepo.readAll();
+    sendJson(ctx, 200, summarizeRubber(sheets_));
+  } catch (err) {
+    sendJson(ctx, 422, { error: err instanceof Error ? err.message : "Percentual inválido." });
+  }
+});
+
 // ---------- Drop-off box (formulário público, sem login, pra QR code na loja) ----------
 
 router.post("/api/dropoff", async (ctx) => {
@@ -276,9 +364,43 @@ const server = createServer(async (req, res) => {
   }
 });
 
+/**
+ * Carga unica (bootstrap) da aba "Financeiro": so escreve se a aba estiver 100% vazia,
+ * pra nunca duplicar linhas a cada deploy/restart do servidor. Ve expensesSeed.ts pro
+ * detalhe de quais linhas e por que. Nao derruba o servidor se falhar (ex: sem acesso a
+ * planilha no momento do boot) - so loga o erro e segue.
+ */
+async function seedExpensesIfEmpty(): Promise<void> {
+  try {
+    const current = await expensesRepo.readAll();
+    if (current.length > 0) return;
+    await sheets.appendRows(config.expensesSheetName, EXPENSES_SEED);
+    console.log(`Aba "${config.expensesSheetName}" estava vazia - ${EXPENSES_SEED.length} despesas iniciais gravadas.`);
+  } catch (err) {
+    console.error("Falha ao popular carga inicial de despesas:", err instanceof Error ? err.message : err);
+  }
+}
+
+/** Mesma logica de bootstrap do seedExpensesIfEmpty, pra aba "Borrachas". */
+async function seedRubberIfEmpty(): Promise<void> {
+  try {
+    const current = await rubberRepo.readAll();
+    if (current.length > 0) return;
+    await sheets.appendRows(
+      config.rubberSheetName,
+      RUBBER_SEED.map((r) => [r.date, r.brand, r.supplier, r.value ?? "", r.percentRemaining ?? "", r.notes]),
+    );
+    console.log(`Aba "${config.rubberSheetName}" estava vazia - ${RUBBER_SEED.length} folhas iniciais gravadas.`);
+  } catch (err) {
+    console.error("Falha ao popular carga inicial de borrachas:", err instanceof Error ? err.message : err);
+  }
+}
+
 // Sincroniza uma vez no boot e liga o UNICO timer de sincronizacao automatica.
 void syncService.sync();
 syncService.startAutoSync();
+void seedExpensesIfEmpty();
+void seedRubberIfEmpty();
 
 server.listen(config.port, () => {
   console.log(`Flash Ressolas rodando na porta ${config.port}`);

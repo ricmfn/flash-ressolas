@@ -138,6 +138,43 @@ export interface ExpensesResponse {
   total: number;
 }
 
+export interface ProfitabilityMonthJSON {
+  monthISO: string;
+  revenue: number;
+  expenses: number;
+  profit: number;
+}
+
+export interface RubberSheetJSON {
+  sheetRowIndex: number;
+  date: string;
+  brand: string;
+  supplier: string;
+  value: number | null;
+  percentRemaining: number | null;
+  notes: string;
+}
+
+export interface RubberResponse {
+  sheets: RubberSheetJSON[];
+  totalInvested: number;
+  activeCount: number;
+  finishedCount: number;
+}
+
+export interface ProfitabilityResponse {
+  totalRevenue: number;
+  totalExpenses: number;
+  profit: number;
+  marginPct: number | null;
+  pairsDelivered: number;
+  variableExpenses: number;
+  fixedExpenses: number;
+  variableCostPerPair: number | null;
+  totalCostPerPair: number | null;
+  monthly: ProfitabilityMonthJSON[];
+}
+
 export const api = {
   me: () => request<{ username: string }>("/api/me"),
   login: (username: string, password: string) =>
@@ -167,4 +204,23 @@ export const api = {
   sync: () => request<SyncResponse>("/api/sync", { method: "POST" }),
   dashboard: () => request<DashboardResponse>("/api/dashboard"),
   expenses: () => request<ExpensesResponse>("/api/expenses"),
+  profitability: () => request<ProfitabilityResponse>("/api/profitability"),
+  rubber: () => request<RubberResponse>("/api/rubber"),
+  updateRubberPercent: (sheetRowIndex: number, percent: number) =>
+    request<RubberResponse>(`/api/rubber/${sheetRowIndex}/percent`, {
+      method: "POST",
+      body: JSON.stringify({ percent }),
+    }),
+  addRubberSheet: (input: {
+    date: string;
+    brand: string;
+    supplier: string;
+    value: number | null;
+    percentRemaining: number | null;
+    notes: string;
+  }) =>
+    request<RubberResponse>("/api/rubber", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
 };

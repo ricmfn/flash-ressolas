@@ -830,6 +830,126 @@ a {
   border-bottom: 1px solid var(--border);
 }
 
+.dashboard-subheading {
+  font-size: 0.85rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  margin: 4px 0 10px;
+}
+
+.profit-positive {
+  color: var(--success);
+  font-weight: 700;
+}
+
+.profit-negative {
+  color: var(--danger);
+  font-weight: 700;
+}
+
+/* ---------- Borrachas ---------- */
+
+.rubber-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.rubber-table__notes {
+  max-width: 260px;
+  color: var(--text-dim);
+  font-size: 0.82rem;
+}
+
+.rubber-row--finished {
+  opacity: 0.55;
+}
+
+.rubber-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.rubber-form__grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.rubber-form__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}
+
+.rubber-form__field input,
+.rubber-form__field textarea {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  font-family: inherit;
+}
+
+.rubber-form__field--wide {
+  grid-column: 1 / -1;
+}
+
+.rubber-form__actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---------- Percent editor ---------- */
+
+.percent-editor__display {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--neon);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.percent-editor__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+
+.percent-editor__input {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 8px 10px;
+  width: 90px;
+}
+
+.percent-editor__error {
+  color: var(--danger);
+  font-size: 0.78rem;
+  margin: 0;
+}
+
+.percent-editor__actions {
+  display: flex;
+  gap: 6px;
+}
+
+.percent-editor__actions .btn {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+}
+
 /* ---------- Responsive: telas maiores ---------- */
 
 @media (min-width: 640px) {
@@ -852,5 +972,9 @@ a {
 
   .stat-grid {
     grid-template-columns: repeat(4, 1fr);
+  }
+
+  .rubber-form__grid {
+    grid-template-columns: repeat(3, 1fr);
   }
 }
