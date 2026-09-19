@@ -11,6 +11,7 @@ import { ExpensesRepository } from "./expensesRepository.js";
 import { EXPENSES_SEED } from "./expensesSeed.js";
 import { RubberRepository } from "./rubberRepository.js";
 import { RUBBER_SEED } from "./rubberSeed.js";
+import { fixRubberSeedV1, addLegacyInvestmentIfMissing } from "./migrations.js";
 import { SyncService } from "./syncService.js";
 import { verifyPassword } from "./auth/password.js";
 import { createSessionToken } from "./auth/session.js";
@@ -399,8 +400,17 @@ async function seedRubberIfEmpty(): Promise<void> {
 // Sincroniza uma vez no boot e liga o UNICO timer de sincronizacao automatica.
 void syncService.sync();
 syncService.startAutoSync();
-void seedExpensesIfEmpty();
-void seedRubberIfEmpty();
+
+// Roda em sequencia (nao em paralelo) pra migrations.ts sempre ver o resultado do seed
+// deste boot, nao um estado no meio da escrita. Cada uma delas ja se protege sozinha
+// (seed so escreve se a aba estiver vazia; migration so escreve se achar o fingerprint
+// antigo), entao rodar de novo a cada restart/deploy e sempre seguro.
+void (async () => {
+  await seedExpensesIfEmpty();
+  await seedRubberIfEmpty();
+  await fixRubberSeedV1(sheets, rubberRepo);
+  await addLegacyInvestmentIfMissing(sheets, expensesRepo);
+})();
 
 server.listen(config.port, () => {
   console.log(`Flash Ressolas rodando na porta ${config.port}`);
