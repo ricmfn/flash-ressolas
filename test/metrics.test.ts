@@ -2,6 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { computeDashboardMetrics, computeProfitability, type ExpenseRow } from "../src/shared/metrics.js";
 import type { Order } from "../src/shared/types.js";
+import type { RubberSheet } from "../src/shared/rubber.js";
 
 /** Cria um pedido minimo valido para os testes, com overrides pontuais. */
 function makeOrder(overrides: Partial<Order> & { sheetRowIndex: number }): Order {
@@ -240,35 +241,51 @@ function makeExpense(overrides: Partial<ExpenseRow>): ExpenseRow {
   return { date: "10/06/2026", category: "Ferramentas e Insumos", description: "teste", value: 10, ...overrides };
 }
 
-test("rentabilidade: custo variavel so soma categorias de material, custo total soma tudo", () => {
+function makeRubberSheet(overrides: Partial<RubberSheet> & { sheetRowIndex: number }): RubberSheet {
+  return {
+    date: "10/06/2026",
+    brand: "Marca",
+    supplier: "",
+    value: 10,
+    percentRemaining: null,
+    notes: "",
+    ...overrides,
+  };
+}
+
+test("rentabilidade: custo variavel soma materiais/ferramentas + borracha; fôrmas agora e' custo fixo", () => {
   const now = new Date("2026-06-15T12:00:00Z");
   const orders = [
     makeOrder({ sheetRowIndex: 2, status: "ENTREGUE - PAGA", price: 250, deliveryDate: new Date("2026-06-05") }),
     makeOrder({ sheetRowIndex: 3, status: "ENTREGUE - PAGA", price: 250, deliveryDate: new Date("2026-06-06") }),
   ];
   const expenses: ExpenseRow[] = [
-    makeExpense({ category: "Fôrmas", value: 100 }),
+    makeExpense({ category: "Fôrmas", value: 100 }), // fixo/investimento agora, nao entra no custo variavel
+    makeExpense({ category: "Materiais", value: 40 }), // cola Vipal e afins
     makeExpense({ category: "Ferramentas e Insumos", value: 50 }),
     makeExpense({ category: "Equipamentos", value: 1000 }), // fixo, nao entra no custo variavel
     makeExpense({ category: "Transporte", value: 200 }), // fixo, nao entra no custo variavel
   ];
+  const rubberSheets: RubberSheet[] = [
+    makeRubberSheet({ sheetRowIndex: 2, value: 60 }), // borracha: sempre variavel, mesmo vindo de outra aba
+  ];
 
-  const p = computeProfitability(orders, expenses, now);
+  const p = computeProfitability(orders, expenses, rubberSheets, now);
 
   assert.equal(p.totalRevenue, 500);
   assert.equal(p.pairsDelivered, 2);
-  assert.equal(p.variableExpenses, 150); // 100 + 50
-  assert.equal(p.fixedExpenses, 1200); // 1000 + 200
-  assert.equal(p.totalExpenses, 1350);
+  assert.equal(p.variableExpenses, 150); // 40 (materiais) + 50 (ferramentas) + 60 (borracha)
+  assert.equal(p.fixedExpenses, 1300); // 100 (fôrmas) + 1000 (equipamentos) + 200 (transporte)
+  assert.equal(p.totalExpenses, 1450);
   assert.equal(p.variableCostPerPair, 75); // 150 / 2
-  assert.equal(p.totalCostPerPair, 675); // 1350 / 2
-  assert.equal(p.profit, 500 - 1350);
+  assert.equal(p.totalCostPerPair, 725); // 1450 / 2
+  assert.equal(p.profit, 500 - 1450);
   assert.ok(p.marginPct !== null && p.marginPct < 0);
 });
 
 test("rentabilidade: sem nenhum par entregue e pago, custo por par fica null (nunca divide por zero)", () => {
   const now = new Date("2026-06-15T12:00:00Z");
-  const p = computeProfitability([], [makeExpense({ value: 50 })], now);
+  const p = computeProfitability([], [makeExpense({ value: 50 })], [], now);
 
   assert.equal(p.pairsDelivered, 0);
   assert.equal(p.variableCostPerPair, null);
@@ -278,11 +295,11 @@ test("rentabilidade: sem nenhum par entregue e pago, custo por par fica null (nu
 
 test("rentabilidade: sem nenhum faturamento, margem fica null em vez de NaN/Infinity", () => {
   const now = new Date("2026-06-15T12:00:00Z");
-  const p = computeProfitability([], [makeExpense({ value: 50 })], now);
+  const p = computeProfitability([], [makeExpense({ value: 50 })], [], now);
   assert.equal(p.marginPct, null);
 });
 
-test("rentabilidade por mes: agrupa faturamento e despesas no mes correto, ultimos 12 meses com o atual por ultimo", () => {
+test("rentabilidade por mes: agrupa faturamento, despesas e borracha no mes correto, ultimos 12 meses com o atual por ultimo", () => {
   const now = new Date("2026-06-15T12:00:00Z");
   const orders = [
     makeOrder({ sheetRowIndex: 2, status: "ENTREGUE - PAGA", price: 100, deliveryDate: new Date("2026-06-10") }),
@@ -292,16 +309,17 @@ test("rentabilidade por mes: agrupa faturamento e despesas no mes correto, ultim
     makeExpense({ date: "05/06/2026", value: 30 }),
     makeExpense({ date: "20/05/2026", value: 10 }),
   ];
+  const rubberSheets: RubberSheet[] = [makeRubberSheet({ sheetRowIndex: 2, date: "07/06/2026", value: 15 })];
 
-  const p = computeProfitability(orders, expenses, now);
+  const p = computeProfitability(orders, expenses, rubberSheets, now);
 
   assert.equal(p.monthly.length, 12);
   assert.equal(p.monthly[p.monthly.length - 1]?.monthISO, "2026-06");
 
   const june = p.monthly.find((m) => m.monthISO === "2026-06");
   assert.equal(june?.revenue, 100);
-  assert.equal(june?.expenses, 30);
-  assert.equal(june?.profit, 70);
+  assert.equal(june?.expenses, 45); // 30 (financeiro) + 15 (borracha)
+  assert.equal(june?.profit, 55);
 
   const may = p.monthly.find((m) => m.monthISO === "2026-05");
   assert.equal(may?.revenue, 50);
@@ -315,9 +333,10 @@ test("rentabilidade: despesa com data invalida/vazia nunca quebra o agrupamento 
     makeExpense({ date: "", value: 20 }),
     makeExpense({ date: "não sei a data", value: 30 }),
   ];
-  const p = computeProfitability([], expenses, now);
+  const rubberSheets: RubberSheet[] = [makeRubberSheet({ sheetRowIndex: 2, date: "09/2025", value: 5 })];
+  const p = computeProfitability([], expenses, rubberSheets, now);
 
-  assert.equal(p.totalExpenses, 50); // ainda entra no total geral
+  assert.equal(p.totalExpenses, 55); // ainda entra no total geral (20 + 30 + 5)
   for (const m of p.monthly) {
     assert.equal(m.expenses, 0); // mas nao em nenhum mes especifico
   }

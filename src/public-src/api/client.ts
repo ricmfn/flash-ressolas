@@ -162,6 +162,18 @@ export interface RubberResponse {
   finishedCount: number;
 }
 
+export interface RubberUsageResponse {
+  /** Chave = sheetRowIndex do PEDIDO (como string, por ser chave de objeto JSON). */
+  current: Record<string, { rubberSheetRowIndex: number | null; rubberLabel: string }>;
+  /** Chave = sheetRowIndex da FOLHA (aba Borrachas); valor = quantos pedidos usam ela hoje. */
+  pairsPerRubberSheet: Record<string, number>;
+}
+
+export interface RubberSheetAssignmentResponse {
+  rubberSheetRowIndex: number | null;
+  rubberLabel: string;
+}
+
 export interface ProfitabilityResponse {
   totalRevenue: number;
   totalExpenses: number;
@@ -222,5 +234,11 @@ export const api = {
     request<RubberResponse>("/api/rubber", {
       method: "POST",
       body: JSON.stringify(input),
+    }),
+  rubberUsage: () => request<RubberUsageResponse>("/api/rubber-usage"),
+  assignRubberSheet: (orderSheetRowIndex: number, rubberSheetRowIndex: number | null) =>
+    request<RubberSheetAssignmentResponse>(`/api/orders/${orderSheetRowIndex}/rubber-sheet`, {
+      method: "POST",
+      body: JSON.stringify({ rubberSheetRowIndex }),
     }),
 };

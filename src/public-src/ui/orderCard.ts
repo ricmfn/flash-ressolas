@@ -1,9 +1,10 @@
-import type { OrderJSON } from "../api/client.js";
+import type { OrderJSON, RubberSheetJSON } from "../api/client.js";
 import type { OrderStatus } from "../../shared/status.js";
 import { orderCardColorGroup } from "../../shared/status.js";
 import { el, clear } from "./dom.js";
 import { createStatusMenu } from "./statusMenuUI.js";
 import { createPriceEditor } from "./priceEditor.js";
+import { createRubberSheetSelector } from "./rubberSheetSelector.js";
 import { openPhotoViewer } from "./photoViewer.js";
 
 function formatDate(iso: string | null): string {
@@ -44,6 +45,15 @@ interface OrderCardOptions {
   ) => Promise<{ ok: boolean; error?: string }>;
   onSavePrice: (sheetRowIndex: number, rawValue: string) => Promise<{ ok: boolean; error?: string }>;
   onMarkReceived: (sheetRowIndex: number) => Promise<{ ok: boolean; error?: string }>;
+  /** Folhas disponíveis pra escolher (aba Borrachas) e quantos pares já usam cada uma —
+   * ver ordersView.ts, que busca isso separado de /api/rubber e /api/rubber-usage. */
+  rubberSheets: RubberSheetJSON[];
+  pairsPerRubberSheet: Record<string, number>;
+  currentRubberSheetRowIndex: number | null;
+  onSaveRubberSheet: (
+    sheetRowIndex: number,
+    rubberSheetRowIndex: number | null,
+  ) => Promise<{ ok: boolean; error?: string }>;
 }
 
 /**
@@ -143,7 +153,16 @@ function createResumeBanner(
   return container;
 }
 
-export function createOrderCard({ order, onSaveStatus, onSavePrice, onMarkReceived }: OrderCardOptions): HTMLElement {
+export function createOrderCard({
+  order,
+  onSaveStatus,
+  onSavePrice,
+  onMarkReceived,
+  rubberSheets,
+  pairsPerRubberSheet,
+  currentRubberSheetRowIndex,
+  onSaveRubberSheet,
+}: OrderCardOptions): HTMLElement {
   const photoBlock = order.photo
     ? el("button", {
         class: "order-card__photo-btn",
@@ -185,6 +204,13 @@ export function createOrderCard({ order, onSaveStatus, onSavePrice, onMarkReceiv
     onSave: (rawValue) => onSavePrice(order.sheetRowIndex, rawValue),
   });
 
+  const rubberSheetSelector = createRubberSheetSelector({
+    sheets: rubberSheets,
+    pairsPerRubberSheet,
+    currentRubberSheetRowIndex,
+    onSave: (rubberSheetRowIndex) => onSaveRubberSheet(order.sheetRowIndex, rubberSheetRowIndex),
+  });
+
   // Cor de fundo clarinha (baixa opacidade) por grupo de status: amarelo = recebido/em
   // conserto, verde = pronto, azul = entregue. Cancelado/aguardando sapatilha ficam sem
   // cor especial (null -> nenhuma classe extra).
@@ -211,6 +237,10 @@ export function createOrderCard({ order, onSaveStatus, onSavePrice, onMarkReceiv
       el("div", { class: "order-card__row" }, [
         el("span", { class: "order-card__label" }, ["Preço final"]),
         priceEditor,
+      ]),
+      el("div", { class: "order-card__row" }, [
+        el("span", { class: "order-card__label" }, ["Folha de borracha"]),
+        rubberSheetSelector,
       ]),
       el("div", { class: "order-card__dates" }, [
         el("span", {}, [`Entrada: ${formatDate(order.orderedAt)}`]),

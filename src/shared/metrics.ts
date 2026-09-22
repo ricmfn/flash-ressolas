@@ -1,6 +1,7 @@
 import { averageDeliveryDays, parseFlexibleDate } from "./dates.js";
 import { isAwaitingDropoff, isDeliveredStatus, isPending } from "./status.js";
 import type { Order } from "./types.js";
+import type { RubberSheet } from "./rubber.js";
 
 export interface DashboardMetrics {
   totalOrders: number;
@@ -241,19 +242,16 @@ export function summarizeExpenses(rows: ExpenseRow[]): ExpensesSummary {
 
 /**
  * Categorias (coluna "Tipo" da aba Financeiro) tratadas como custo VARIAVEL de producao —
- * o que e efetivamente consumido pra ressolar um par (formas, materiais, ferramentas e
- * insumos). Usado pra calcular o "custo variavel por par". Combinado com o Ricardo: segue
- * a mesma logica que ele ja usava informalmente (so material entra na conta por par) —
- * equipamento, treinamento e transporte ficam de fora por serem custo fixo/investimento,
- * nao algo que cresce proporcionalmente a cada par ressolado.
+ * o que e efetivamente consumido pra ressolar um par: materiais (cola Vipal/Vipafix e
+ * afins) e ferramentas e insumos. Usado pra calcular o "custo variavel por par", somado
+ * ao valor das folhas de borracha da aba Borrachas (ver computeProfitability). Fôrmas
+ * ficou de fora a pedido do Ricardo: e' investimento inicial (nao se gasta uma fôrma nova
+ * por par), igual equipamento/treinamento/transporte — todos custo fixo, nao algo que
+ * cresce proporcionalmente a cada par ressolado.
  *
  * Ajustavel: se novas categorias forem usadas na planilha, so incluir/tirar daqui.
  */
-export const VARIABLE_EXPENSE_CATEGORIES = new Set<string>([
-  "Fôrmas",
-  "Materiais",
-  "Ferramentas e Insumos",
-]);
+export const VARIABLE_EXPENSE_CATEGORIES = new Set<string>(["Materiais", "Ferramentas e Insumos"]);
 
 export interface ProfitabilityMonthPoint {
   monthISO: string;
@@ -265,7 +263,8 @@ export interface ProfitabilityMonthPoint {
 export interface Profitability {
   /** Faturamento total (pedidos ENTREGUE - PAGA) desde o inicio. */
   totalRevenue: number;
-  /** Soma de TODAS as despesas da aba Financeiro (variavel + fixo/investimento). */
+  /** Soma de TODAS as despesas da aba Financeiro + folhas de borracha da aba Borrachas
+   * (variavel + fixo/investimento). */
   totalExpenses: number;
   /** totalRevenue - totalExpenses. */
   profit: number;
@@ -275,7 +274,7 @@ export interface Profitability {
   pairsDelivered: number;
   variableExpenses: number;
   fixedExpenses: number;
-  /** variableExpenses / pairsDelivered — custo so de material por par. */
+  /** variableExpenses / pairsDelivered — custo so de material (inclusive borracha) por par. */
   variableCostPerPair: number | null;
   /** totalExpenses / pairsDelivered — custo "tudo incluso" por par, ate agora. */
   totalCostPerPair: number | null;
@@ -285,9 +284,16 @@ export interface Profitability {
 
 const PROFITABILITY_MONTHS_WINDOW = 12;
 
+/**
+ * orders + despesas da aba Financeiro + folhas da aba Borrachas (rubberSheets, opcional —
+ * cada folha comprada entra inteira no custo VARIAVEL, junto com Materiais/Ferramentas e
+ * Insumos: e' o mesmo tipo de gasto, so que rastreado numa aba separada pra acompanhar
+ * estoque/consumo de cada folha, em vez de na aba Financeiro).
+ */
 export function computeProfitability(
   orders: Order[],
   expenseRows: ExpenseRow[],
+  rubberSheets: RubberSheet[] = [],
   now: Date = new Date(),
 ): Profitability {
   const paidDelivered = orders.filter((o) => o.status === "ENTREGUE - PAGA" && o.price !== null);
@@ -306,6 +312,13 @@ export function computeProfitability(
       fixedExpenses += row.value;
     }
   }
+  // Borracha e' material consumido por par, mesmo rastreada numa aba a parte: entra
+  // inteira no custo variavel (nunca no fixo).
+  for (const sheet of rubberSheets) {
+    if (sheet.value === null) continue;
+    totalExpenses += sheet.value;
+    variableExpenses += sheet.value;
+  }
 
   const profit = totalRevenue - totalExpenses;
   const marginPct = totalRevenue > 0 ? (profit / totalRevenue) * 100 : null;
@@ -314,7 +327,7 @@ export function computeProfitability(
 
   // Agrupamento mensal (ultimos 12 meses, mes atual por ultimo) — faturamento pela mesma
   // data de referencia usada no resto do dashboard (revenueRefDate), despesas pela data
-  // lancada na coluna "Data" da aba Financeiro.
+  // lancada na coluna "Data" da aba Financeiro/Borrachas.
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthly: ProfitabilityMonthPoint[] = [];
   for (let i = PROFITABILITY_MONTHS_WINDOW - 1; i >= 0; i--) {
@@ -329,13 +342,23 @@ export function computeProfitability(
       })
       .reduce((sum, o) => sum + (o.price ?? 0), 0);
 
-    const expenses = expenseRows
+    const expensesInMonth = expenseRows
       .filter((row) => {
         if (row.value === null) return false;
         const d = parseFlexibleDate(row.date);
         return d !== null && d >= monthStart && d < monthEnd;
       })
       .reduce((sum, row) => sum + (row.value ?? 0), 0);
+
+    const rubberInMonth = rubberSheets
+      .filter((sheet) => {
+        if (sheet.value === null) return false;
+        const d = parseFlexibleDate(sheet.date);
+        return d !== null && d >= monthStart && d < monthEnd;
+      })
+      .reduce((sum, sheet) => sum + (sheet.value ?? 0), 0);
+
+    const expenses = expensesInMonth + rubberInMonth;
 
     monthly.push({ monthISO, revenue, expenses, profit: revenue - expenses });
   }

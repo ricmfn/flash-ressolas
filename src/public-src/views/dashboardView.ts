@@ -343,13 +343,13 @@ export function renderDashboardView(container: Element): DashboardViewHandle {
             statCard(
               "Custo variável por par (só material)",
               hasPairs ? formatBRL(profitability.variableCostPerPair) : "—",
-              hasPairs ? undefined : "ainda sem pares entregues e pagos",
+              hasPairs ? "materiais, ferramentas e insumos, e as folhas da aba Borrachas" : "ainda sem pares entregues e pagos",
             ),
             statCard(
               "Custo total por par (tudo incluso, até agora)",
               hasPairs ? formatBRL(profitability.totalCostPerPair) : "—",
               hasPairs
-                ? "inclui equipamento, treinamento e transporte, diluídos pelos pares feitos até agora"
+                ? "inclui fôrmas, equipamento, treinamento e transporte, diluídos pelos pares feitos até agora"
                 : "ainda sem pares entregues e pagos",
             ),
           ]),

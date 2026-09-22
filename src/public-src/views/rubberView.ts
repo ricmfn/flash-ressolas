@@ -17,6 +17,11 @@ function statCard(label: string, value: string): HTMLElement {
 
 export function renderRubberView(container: Element): RubberViewHandle {
   let data: RubberResponse | null = null;
+  // Quantos pedidos usam cada folha hoje (aba "Uso de Borracha", selecionada no card do
+  // pedido) — chave = sheetRowIndex da folha. Buscado à parte de /api/rubber, mesmo
+  // espírito do resto do app (fetches independentes por preocupação). Se falhar, a coluna
+  // "Pares" so fica com "—" em tudo — nunca impede o resto da tela de aparecer.
+  let pairsPerRubberSheet: Record<string, number> = {};
   let loading = true;
   let error: string | null = null;
 
@@ -82,6 +87,7 @@ export function renderRubberView(container: Element): RubberViewHandle {
                   el("th", {}, ["Data"]),
                   el("th", {}, ["Valor"]),
                   el("th", {}, ["% restante"]),
+                  el("th", {}, ["Pares"]),
                   el("th", {}, ["Observações"]),
                 ]),
               ]),
@@ -107,6 +113,9 @@ export function renderRubberView(container: Element): RubberViewHandle {
                           return { ok: false, error: res.error };
                         },
                       }),
+                    ]),
+                    el("td", { title: "Pedidos que selecionaram esta folha no card (aba Pedidos)" }, [
+                      String(pairsPerRubberSheet[sheet.sheetRowIndex] ?? 0),
                     ]),
                     el("td", { class: "rubber-table__notes" }, [sheet.notes || "—"]),
                   ]),
@@ -227,7 +236,7 @@ export function renderRubberView(container: Element): RubberViewHandle {
   async function refresh(): Promise<void> {
     loading = true;
     render();
-    const res = await api.rubber();
+    const [res, usageRes] = await Promise.all([api.rubber(), api.rubberUsage()]);
     loading = false;
     if (res.ok) {
       data = res.data;
@@ -235,6 +244,9 @@ export function renderRubberView(container: Element): RubberViewHandle {
     } else {
       error = res.error;
     }
+    // Coluna "Pares" e' auxiliar: se essa chamada falhar, so fica com "—"/0 em tudo, nunca
+    // impede o resto da aba (estoque de borracha) de aparecer.
+    if (usageRes.ok) pairsPerRubberSheet = usageRes.data.pairsPerRubberSheet;
     render();
   }
 

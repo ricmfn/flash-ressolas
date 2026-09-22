@@ -11,6 +11,7 @@ import { ExpensesRepository } from "./expensesRepository.js";
 import { EXPENSES_SEED } from "./expensesSeed.js";
 import { RubberRepository } from "./rubberRepository.js";
 import { RUBBER_SEED } from "./rubberSeed.js";
+import { RubberUsageRepository, RUBBER_USAGE_HEADER } from "./rubberUsageRepository.js";
 import { fixRubberSeedV1, addLegacyInvestmentIfMissing } from "./migrations.js";
 import { SyncService } from "./syncService.js";
 import { verifyPassword } from "./auth/password.js";
@@ -20,6 +21,7 @@ import { orderToJSON } from "./serialize.js";
 import { uploadPublicPhoto } from "./google/driveClient.js";
 import { computeDashboardMetrics, computeProfitability, summarizeExpenses } from "../shared/metrics.js";
 import { summarizeRubber } from "../shared/rubber.js";
+import { currentRubberAssignments, countPairsPerRubberSheet } from "../shared/rubberUsage.js";
 import { isValidStatus, isPending, isAwaitingDropoff } from "../shared/status.js";
 import { resolveDropoffLabel } from "../shared/dropoffLocations.js";
 
@@ -35,6 +37,7 @@ const sheets = new SheetsClient(account, config.spreadsheetId);
 const ordersRepo = new OrdersRepository(sheets);
 const expensesRepo = new ExpensesRepository(sheets);
 const rubberRepo = new RubberRepository(sheets);
+const rubberUsageRepo = new RubberUsageRepository(sheets);
 const syncService = new SyncService(ordersRepo, config.autoSyncIntervalMs);
 
 const router = new Router();
@@ -183,7 +186,8 @@ router.get("/api/profitability", async (ctx) => {
   try {
     const orders = syncService.store.listSorted();
     const expenseRows = await expensesRepo.readAll();
-    sendJson(ctx, 200, computeProfitability(orders, expenseRows));
+    const rubberSheets = await rubberRepo.readAll();
+    sendJson(ctx, 200, computeProfitability(orders, expenseRows, rubberSheets));
   } catch (err) {
     sendJson(ctx, 502, { error: err instanceof Error ? err.message : "Erro ao calcular rentabilidade." });
   }
@@ -258,6 +262,66 @@ router.post("/api/rubber/:row/percent", async (ctx) => {
     sendJson(ctx, 200, summarizeRubber(sheets_));
   } catch (err) {
     sendJson(ctx, 422, { error: err instanceof Error ? err.message : "Percentual inválido." });
+  }
+});
+
+// ---------- Uso de borracha por pedido (qual folha ressolou qual par) ----------
+
+router.get("/api/rubber-usage", async (ctx) => {
+  if (!requireAuth(ctx)) return;
+  try {
+    const entries = await rubberUsageRepo.readAll();
+    const current = currentRubberAssignments(entries);
+    const currentJSON: Record<string, { rubberSheetRowIndex: number | null; rubberLabel: string }> = {};
+    for (const [orderRow, entry] of current) {
+      currentJSON[orderRow] = { rubberSheetRowIndex: entry.rubberSheetRowIndex, rubberLabel: entry.rubberLabel };
+    }
+    const pairsCounts = countPairsPerRubberSheet(entries);
+    const pairsPerRubberSheet: Record<string, number> = {};
+    for (const [rubberRow, count] of pairsCounts) {
+      pairsPerRubberSheet[rubberRow] = count;
+    }
+    sendJson(ctx, 200, { current: currentJSON, pairsPerRubberSheet });
+  } catch (err) {
+    sendJson(ctx, 502, { error: err instanceof Error ? err.message : "Erro ao ler uso de borracha." });
+  }
+});
+
+router.post("/api/orders/:row/rubber-sheet", async (ctx) => {
+  if (!requireAuth(ctx)) return;
+  const sheetRowIndex = Number(ctx.params.row);
+  if (!Number.isInteger(sheetRowIndex) || sheetRowIndex < 2) {
+    return sendJson(ctx, 400, { error: "Linha inválida." });
+  }
+  const body = await readJsonBody<{ rubberSheetRowIndex?: number | string | null }>(ctx.req);
+  const rubberSheetRowIndex =
+    body.rubberSheetRowIndex === undefined || body.rubberSheetRowIndex === null || body.rubberSheetRowIndex === ""
+      ? null
+      : Number(body.rubberSheetRowIndex);
+  if (rubberSheetRowIndex !== null && (!Number.isInteger(rubberSheetRowIndex) || rubberSheetRowIndex < 2)) {
+    return sendJson(ctx, 400, { error: "Folha inválida." });
+  }
+
+  try {
+    let rubberLabel = "";
+    if (rubberSheetRowIndex !== null) {
+      const sheets_ = await rubberRepo.readAll();
+      const match = sheets_.find((s) => s.sheetRowIndex === rubberSheetRowIndex);
+      if (!match) return sendJson(ctx, 404, { error: "Folha de borracha não encontrada." });
+      rubberLabel = [match.brand, match.supplier].filter((v) => v.trim() !== "").join(" — ");
+    }
+
+    const order = syncService.store.get(sheetRowIndex);
+    await rubberUsageRepo.assign(sheetRowIndex, order?.formId ?? null, rubberSheetRowIndex, rubberLabel);
+
+    const entries = await rubberUsageRepo.readAll();
+    const assigned = currentRubberAssignments(entries).get(sheetRowIndex) ?? null;
+    sendJson(ctx, 200, {
+      rubberSheetRowIndex: assigned?.rubberSheetRowIndex ?? null,
+      rubberLabel: assigned?.rubberLabel ?? "",
+    });
+  } catch (err) {
+    sendJson(ctx, 500, { error: err instanceof Error ? err.message : "Erro ao salvar a folha usada." });
   }
 });
 
@@ -404,8 +468,16 @@ syncService.startAutoSync();
 // Roda em sequencia (nao em paralelo) pra migrations.ts sempre ver o resultado do seed
 // deste boot, nao um estado no meio da escrita. Cada uma delas ja se protege sozinha
 // (seed so escreve se a aba estiver vazia; migration so escreve se achar o fingerprint
-// antigo), entao rodar de novo a cada restart/deploy e sempre seguro.
+// antigo; ensureSheetExists so cria se a aba ainda nao existir), entao rodar de novo a
+// cada restart/deploy e sempre seguro.
 void (async () => {
+  try {
+    await sheets.ensureSheetExists(config.rubberUsageSheetName, RUBBER_USAGE_HEADER);
+  } catch (err) {
+    // "Uso de Borracha" so e' necessaria pro botao de folha no card do pedido — uma falha
+    // aqui (ex: sem acesso a planilha no boot) nunca deve impedir o resto do app de subir.
+    console.error('Falha ao garantir a aba "Uso de Borracha":', err instanceof Error ? err.message : err);
+  }
   await seedExpensesIfEmpty();
   await seedRubberIfEmpty();
   await fixRubberSeedV1(sheets, rubberRepo);

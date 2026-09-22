@@ -652,6 +652,40 @@ a {
   font-size: 0.8rem;
 }
 
+/* ---------- Rubber sheet selector (card do pedido) ---------- */
+
+.rubber-sheet-selector__panel {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+}
+
+.rubber-sheet-selector__select {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font-size: 0.82rem;
+  max-width: 100%;
+}
+
+.rubber-sheet-selector__select:disabled {
+  opacity: 0.6;
+}
+
+.rubber-sheet-selector__hint {
+  color: var(--text-muted);
+  font-size: 0.75rem;
+}
+
+.rubber-sheet-selector__error {
+  color: var(--danger);
+  font-size: 0.78rem;
+  margin: 0;
+}
+
 /* ---------- Photo viewer ---------- */
 
 .photo-viewer {

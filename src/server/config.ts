@@ -34,6 +34,9 @@ export const config = {
   editsSheetName: process.env.EDITS_SHEET_NAME ?? "Edições",
   expensesSheetName: process.env.EXPENSES_SHEET_NAME ?? "Financeiro",
   rubberSheetName: process.env.RUBBER_SHEET_NAME ?? "Borrachas",
+  /** Aba nova, criada automaticamente pelo app se ainda nao existir (ver
+   * SheetsClient.ensureSheetExists) — nunca precisa ser criada manualmente na planilha. */
+  rubberUsageSheetName: process.env.RUBBER_USAGE_SHEET_NAME ?? "Uso de Borracha",
   /** Intervalo do timer de sincronizacao automatica, em ms. Default: 5 minutos. */
   autoSyncIntervalMs: Number(process.env.AUTO_SYNC_INTERVAL_MS ?? 5 * 60 * 1000),
   sessionSecret: process.env.SESSION_SECRET ?? required("SESSION_SECRET"),

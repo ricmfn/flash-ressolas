@@ -66,6 +66,39 @@ export class SheetsClient {
     await this.appendRows(sheetName, [row]);
   }
 
+  /** Lista os nomes (titulos) de todas as abas existentes na planilha. */
+  async listSheetNames(): Promise<string[]> {
+    const url = `${BASE}/${this.spreadsheetId}?fields=sheets.properties.title`;
+    const res = await fetch(url, { headers: await authHeaders(this.account) });
+    if (!res.ok) throw new Error(`Erro ao listar as abas da planilha: ${await parseErrorBody(res)}`);
+    const json = (await res.json()) as { sheets?: { properties?: { title?: string } }[] };
+    return (json.sheets ?? []).map((s) => s.properties?.title ?? "").filter((title) => title !== "");
+  }
+
+  /**
+   * Cria uma aba nova com o nome dado, se ainda nao existir — idempotente (chamado a cada
+   * boot, so faz algo na primeira vez). Usado pra abas 100% controladas pelo app (ex: "Uso
+   * de Borracha"), pra nunca depender de alguem criar a aba manualmente na planilha antes
+   * do deploy. Se `headerRow` for passado, so e' escrito quando a aba acabou de ser criada
+   * agora — nunca sobrescreve o cabecalho de uma aba ja existente.
+   */
+  async ensureSheetExists(sheetName: string, headerRow?: (string | number)[]): Promise<void> {
+    const names = await this.listSheetNames();
+    if (names.includes(sheetName)) return;
+
+    const url = `${BASE}/${this.spreadsheetId}:batchUpdate`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: await authHeaders(this.account),
+      body: JSON.stringify({ requests: [{ addSheet: { properties: { title: sheetName } } }] }),
+    });
+    if (!res.ok) throw new Error(`Erro ao criar a aba "${sheetName}": ${await parseErrorBody(res)}`);
+
+    if (headerRow) {
+      await this.appendRow(sheetName, headerRow);
+    }
+  }
+
   /**
    * Adiciona varias linhas de uma vez ao final de uma aba, numa unica chamada (usado pela
    * carga inicial da aba "Financeiro" - ver expensesSeed.ts/seedExpensesIfEmpty).

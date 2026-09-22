@@ -1,4 +1,4 @@
-import { api, type OrderJSON } from "../api/client.js";
+import { api, type OrderJSON, type RubberSheetJSON, type RubberUsageResponse } from "../api/client.js";
 import { VALID_STATUSES, isPending, isAwaitingDropoff, type OrderStatus } from "../../shared/status.js";
 import { el, clear } from "../ui/dom.js";
 import { createOrderCard } from "../ui/orderCard.js";
@@ -15,6 +15,12 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
   let pendingCount = 0;
   let awaitingDropoffCount = 0;
   let lastSyncedAt: string | null = null;
+  // Folhas de borracha (aba Borrachas) e qual folha cada pedido usa hoje (aba "Uso de
+  // Borracha") — buscadas à parte de /api/orders, igual dashboard/expenses/rubber já são
+  // fetches independentes entre si. Nunca bloqueiam a lista de pedidos: se falharem, o
+  // seletor de folha em cada card so fica vazio/sem opções, o resto da tela funciona normal.
+  let rubberSheets: RubberSheetJSON[] = [];
+  let rubberUsage: RubberUsageResponse = { current: {}, pairsPerRubberSheet: {} };
   let loading = true;
   let syncing = false;
   let loadError: string | null = null;
@@ -112,6 +118,24 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
       const idx = orders.findIndex((o) => o.sheetRowIndex === sheetRowIndex);
       if (idx >= 0) orders[idx] = result.data.order;
       renderContent();
+      return { ok: true as const };
+    }
+    return { ok: false as const, error: result.error };
+  }
+
+  async function handleSaveRubberSheet(sheetRowIndex: number, rubberSheetRowIndex: number | null) {
+    const result = await api.assignRubberSheet(sheetRowIndex, rubberSheetRowIndex);
+    if (result.ok) {
+      // Atualiza so o mapa local (nunca precisa recarregar pedidos nem folhas por causa
+      // disso) — o proximo refresh periodico traz pairsPerRubberSheet recalculado do
+      // servidor de qualquer forma.
+      rubberUsage = {
+        ...rubberUsage,
+        current: {
+          ...rubberUsage.current,
+          [sheetRowIndex]: { rubberSheetRowIndex: result.data.rubberSheetRowIndex, rubberLabel: result.data.rubberLabel },
+        },
+      };
       return { ok: true as const };
     }
     return { ok: false as const, error: result.error };
@@ -270,6 +294,10 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
           onSaveStatus: handleSaveStatus,
           onSavePrice: handleSavePrice,
           onMarkReceived: handleMarkReceived,
+          rubberSheets,
+          pairsPerRubberSheet: rubberUsage.pairsPerRubberSheet,
+          currentRubberSheetRowIndex: rubberUsage.current[order.sheetRowIndex]?.rubberSheetRowIndex ?? null,
+          onSaveRubberSheet: handleSaveRubberSheet,
         }),
       );
     }
@@ -288,19 +316,31 @@ export function renderOrdersView(container: Element): OrdersViewHandle {
     // recriar o <input> de busca (e perder foco/cursor) durante o auto-refresh periodico
     // enquanto o usuario esta digitando.
     renderContent();
-    const result = await api.orders();
+    // Em paralelo: sao 3 abas diferentes (Pedidos, Borrachas, Uso de Borracha), e as duas
+    // ultimas ja tem cache de 60s + dedup de leitura em voo no servidor (ver
+    // rubberRepository.ts/rubberUsageRepository.ts) — buscar junto nunca dobra a leitura
+    // ao vivo na planilha.
+    const [ordersResult, rubberResult, usageResult] = await Promise.all([
+      api.orders(),
+      api.rubber(),
+      api.rubberUsage(),
+    ]);
     loading = false;
-    if (result.ok) {
-      orders = result.data.orders;
-      pendingCount = result.data.pendingCount;
-      awaitingDropoffCount = result.data.awaitingDropoffCount;
-      lastSyncedAt = result.data.lastSyncedAt;
-      loadError = result.data.lastSyncError; // erro de sync de fundo, se houver, ainda mostra os dados
+    if (ordersResult.ok) {
+      orders = ordersResult.data.orders;
+      pendingCount = ordersResult.data.pendingCount;
+      awaitingDropoffCount = ordersResult.data.awaitingDropoffCount;
+      lastSyncedAt = ordersResult.data.lastSyncedAt;
+      loadError = ordersResult.data.lastSyncError; // erro de sync de fundo, se houver, ainda mostra os dados
       hasLoadedOnce = true;
     } else {
       // Preserva os dados ja carregados; so mostra erro retry-avel.
-      loadError = result.error;
+      loadError = ordersResult.error;
     }
+    // Folha de borracha e' um recurso auxiliar do card: se essas duas falharem, o seletor
+    // so fica sem opcoes/zerado — nunca impede a lista de pedidos de aparecer.
+    if (rubberResult.ok) rubberSheets = rubberResult.data.sheets;
+    if (usageResult.ok) rubberUsage = usageResult.data;
     renderContent();
   }
 
