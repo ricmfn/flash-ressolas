@@ -79,6 +79,17 @@ export function createRubberSheetSelector(options: RubberSheetSelectorOptions): 
 
     const children: (Node | string | null)[] = [select];
     if (saving) children.push(el("span", { class: "rubber-sheet-selector__hint" }, ["salvando…"]));
+    // Lista vazia quase sempre significa que a busca da aba Borrachas falhou ou ainda não
+    // chegou (nunca que não há folhas cadastradas — a aba raramente fica vazia de verdade).
+    // Sem essa pista, o seletor parece "funcionar" mas nunca mostra nenhuma opção real, o
+    // que é justamente confuso demais pra descobrir sozinho.
+    if (!saving && ordered.length === 0) {
+      children.push(
+        el("span", { class: "rubber-sheet-selector__hint" }, [
+          "Nenhuma folha carregada — toque em \"Atualizar / Sincronizar\" no topo da tela.",
+        ]),
+      );
+    }
     if (error) children.push(el("p", { class: "rubber-sheet-selector__error" }, [error]));
 
     container.appendChild(el("div", { class: "rubber-sheet-selector__panel" }, children));

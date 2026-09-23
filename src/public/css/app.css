@@ -406,9 +406,10 @@ a {
 
 .order-card__header {
   display: flex;
+  flex-wrap: wrap;
   justify-content: space-between;
   align-items: flex-start;
-  gap: 8px;
+  gap: 4px 8px;
 }
 
 .order-card__header-right {
@@ -434,7 +435,11 @@ a {
   margin: 0;
   font-size: 1rem;
   font-weight: 700;
-  overflow-wrap: anywhere;
+  /* break-word (nao "anywhere"): so parte no meio de uma palavra se ELA SOZINHA nao
+     couber na linha — nomes normais sempre quebram palavra a palavra, nunca letra a
+     letra, mesmo numa coluna estreita. */
+  overflow-wrap: break-word;
+  min-width: 140px;
 }
 
 .order-card__meta {
