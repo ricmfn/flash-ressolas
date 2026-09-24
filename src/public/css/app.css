@@ -417,6 +417,16 @@ a {
   align-items: center;
   gap: 8px;
   flex-shrink: 0;
+  /* Quando o nome e comprido, .order-card__header (space-between + flex-wrap) joga este
+     grupo pra sua PROPRIA linha — e um unico item por linha com space-between nao tem
+     "outro lado" pra empurrar contra, entao ele cai pro inicio (esquerda) em vez de ficar
+     colado a direita. margin-left:auto resolve isso nos dois casos (mesma linha do nome
+     ou linha propria): consome todo espaco disponivel antes dele, mantendo o grupo sempre
+     encostado na borda direita do card. */
+  margin-left: auto;
+  /* Ancora de posicionamento do menu de status (ver .status-menu__panel abaixo) — este
+     wrapper sempre tem largura real porque o days-badge fica nele junto, nunca some. */
+  position: relative;
 }
 
 /* "X dias" no canto superior direito do card (RECEBIDO/EM_CONSERTO) — fundo escuro
@@ -550,8 +560,17 @@ a {
 .status-badge--entregue-nao-paga { background: #3A1414; color: var(--danger); }
 .status-badge--cancelado { background: #2C2C30; color: var(--text-dim); }
 
+/* SEM position:relative aqui de proposito: quando o menu abre, o botao-gatilho (unico
+   filho "em fluxo" do .status-menu) e substituido pelo painel, que e position:absolute —
+   e um elemento absolute NUNCA conta pro tamanho do pai. Ou seja, .status-menu colapsava
+   pra largura 0 assim que abria, e o "right: 0" do painel passava a valer em relacao a
+   esse ponto de largura zero (em vez da borda direita real do grupo de badges) — em
+   telas largas isso so deixava o menu deslocado, mas no celular jogava o painel inteiro
+   pra fora da tela pela esquerda (formatacao "quebrada", sem dar pra tocar em nada). O
+   .status-menu__panel abaixo se ancora no .order-card__header-right (que tem o
+   days-badge sempre presente, entao nunca fica com largura 0) em vez de se ancorar aqui. */
 .status-menu {
-  position: relative;
+  position: static;
 }
 
 .status-menu__panel {
@@ -565,6 +584,7 @@ a {
   border-radius: 12px;
   padding: 12px;
   width: 240px;
+  max-width: calc(100vw - 24px);
   display: flex;
   flex-direction: column;
   gap: 8px;
