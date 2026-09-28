@@ -45,6 +45,13 @@ html, body {
   color: var(--text);
   font-family: var(--font-body);
   -webkit-tap-highlight-color: transparent;
+  /* Rede de seguranca pro app inteiro: a pagina em si nunca deve rolar na horizontal (so
+     verticalmente). Sem isso, um elemento com largura minima maior que a tela (ex.: o
+     <select> de "Folha de borracha" antes do fix em .rubber-sheet-selector, ou uma tabela
+     larga sem contêiner proprio) vaza pro documento inteiro e arrasta a pagina toda pros
+     lados. Isso NAO impede rolagem horizontal CONTIDA dentro de um elemento especifico
+     (ex.: .table-scroll abaixo) — so bloqueia no nivel do documento. */
+  overflow-x: hidden;
 }
 
 body {
@@ -684,6 +691,22 @@ a {
 
 /* ---------- Rubber sheet selector (card do pedido) ---------- */
 
+/* CAUSA RAIZ do bug de scroll horizontal da tela de Pedidos: este e' um item flex dentro
+   de .order-card__row (flex-wrap: wrap), e itens flex tem min-width:auto por padrao — ou
+   seja, o navegador nunca deixa este elemento encolher abaixo do conteudo mais largo
+   possivel dentro dele, mesmo com flex-wrap. O conteudo aqui e' um <select> cujas <option>
+   podem ser bem compridas ("Stick Evolution Nero (4mm) — Davos S.p.A. (fatura E-137) —
+   20/03/2026 (25%)"), entao sem isto o item "explode" pra fora da tela — e como nada no
+   caminho tinha overflow:hidden, isso vazava pro documento inteiro (a pagina toda ficava
+   scrollavel na horizontal). O max-width:100% que ja existe em .rubber-sheet-selector__select
+   NAO bastava sozinho: 100% de uma cadeia de larguras indefinidas continua indefinido.
+   min-width:0 quebra essa cadeia (mesmo padrao ja usado em .order-card__body). Efeito
+   colateral esperado e aceitavel: o <select> fechado pode cortar/truncar o texto da opcao
+   selecionada quando ela nao cabe — abrir o menu continua mostrando o texto completo. */
+.rubber-sheet-selector {
+  min-width: 0;
+}
+
 .rubber-sheet-selector__panel {
   display: flex;
   flex-direction: column;
@@ -863,6 +886,16 @@ a {
 .month-nav__btn:disabled {
   opacity: 0.35;
   cursor: not-allowed;
+}
+
+/* Contêiner de rolagem horizontal PROPRIA pra tabela (ver tableScroll() em dom.ts): a
+   pagina em si nunca rola na horizontal (ver overflow-x:hidden em html,body acima) — se
+   uma tabela for larga demais pra caber na tela, so ELA rola de lado, dentro dos seus
+   proprios limites, nunca arrastando o resto da pagina junto. */
+.table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .weeks-table {

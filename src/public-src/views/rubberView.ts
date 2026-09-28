@@ -1,6 +1,6 @@
 import { api, type RubberResponse } from "../api/client.js";
 import { formatBRL } from "../../shared/currency.js";
-import { el, clear } from "../ui/dom.js";
+import { el, clear, tableScroll } from "../ui/dom.js";
 import { createPercentEditor } from "../ui/percentEditor.js";
 
 interface RubberViewHandle {
@@ -79,49 +79,51 @@ export function renderRubberView(container: Element): RubberViewHandle {
         el("h2", {}, ["Folhas"]),
         data.sheets.length === 0
           ? el("p", { class: "state-banner state-banner--empty" }, ["Nenhuma folha registrada ainda."])
-          : el("table", { class: "weeks-table rubber-table" }, [
-              el("thead", {}, [
-                el("tr", {}, [
-                  el("th", {}, ["Marca"]),
-                  el("th", {}, ["Fornecedor"]),
-                  el("th", {}, ["Data"]),
-                  el("th", {}, ["Valor"]),
-                  el("th", {}, ["% restante"]),
-                  el("th", {}, ["Pares"]),
-                  el("th", {}, ["Observações"]),
-                ]),
-              ]),
-              el(
-                "tbody",
-                {},
-                ordered.map((sheet) =>
-                  el("tr", { class: sheet.percentRemaining === 0 ? "rubber-row--finished" : "" }, [
-                    el("td", {}, [sheet.brand || "—"]),
-                    el("td", {}, [sheet.supplier || "—"]),
-                    el("td", {}, [sheet.date || "—"]),
-                    el("td", {}, [formatBRL(sheet.value)]),
-                    el("td", {}, [
-                      createPercentEditor({
-                        currentPercent: sheet.percentRemaining,
-                        onSave: async (percent) => {
-                          const res = await api.updateRubberPercent(sheet.sheetRowIndex, percent);
-                          if (res.ok) {
-                            data = res.data;
-                            render();
-                            return { ok: true };
-                          }
-                          return { ok: false, error: res.error };
-                        },
-                      }),
-                    ]),
-                    el("td", { title: "Pedidos que selecionaram esta folha no card (aba Pedidos)" }, [
-                      String(pairsPerRubberSheet[sheet.sheetRowIndex] ?? 0),
-                    ]),
-                    el("td", { class: "rubber-table__notes" }, [sheet.notes || "—"]),
+          : tableScroll(
+              el("table", { class: "weeks-table rubber-table" }, [
+                el("thead", {}, [
+                  el("tr", {}, [
+                    el("th", {}, ["Marca"]),
+                    el("th", {}, ["Fornecedor"]),
+                    el("th", {}, ["Data"]),
+                    el("th", {}, ["Valor"]),
+                    el("th", {}, ["% restante"]),
+                    el("th", {}, ["Pares"]),
+                    el("th", {}, ["Observações"]),
                   ]),
+                ]),
+                el(
+                  "tbody",
+                  {},
+                  ordered.map((sheet) =>
+                    el("tr", { class: sheet.percentRemaining === 0 ? "rubber-row--finished" : "" }, [
+                      el("td", {}, [sheet.brand || "—"]),
+                      el("td", {}, [sheet.supplier || "—"]),
+                      el("td", {}, [sheet.date || "—"]),
+                      el("td", {}, [formatBRL(sheet.value)]),
+                      el("td", {}, [
+                        createPercentEditor({
+                          currentPercent: sheet.percentRemaining,
+                          onSave: async (percent) => {
+                            const res = await api.updateRubberPercent(sheet.sheetRowIndex, percent);
+                            if (res.ok) {
+                              data = res.data;
+                              render();
+                              return { ok: true };
+                            }
+                            return { ok: false, error: res.error };
+                          },
+                        }),
+                      ]),
+                      el("td", { title: "Pedidos que selecionaram esta folha no card (aba Pedidos)" }, [
+                        String(pairsPerRubberSheet[sheet.sheetRowIndex] ?? 0),
+                      ]),
+                      el("td", { class: "rubber-table__notes" }, [sheet.notes || "—"]),
+                    ]),
+                  ),
                 ),
-              ),
-            ]),
+              ]),
+            ),
       ]),
     );
 

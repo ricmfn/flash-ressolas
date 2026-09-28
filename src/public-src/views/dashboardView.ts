@@ -1,6 +1,6 @@
 import { api, type DashboardResponse, type ExpensesResponse, type ProfitabilityResponse } from "../api/client.js";
 import { formatBRL } from "../../shared/currency.js";
-import { el, clear } from "../ui/dom.js";
+import { el, clear, tableScroll } from "../ui/dom.js";
 
 interface DashboardViewHandle {
   root: HTMLElement;
@@ -138,26 +138,28 @@ function monthlyRevenuePanel(
       statCardPlain("Faturamento do mês", formatBRL(month.revenue)),
       statCardPlain("Pedidos pagos no mês", String(month.orders)),
     ]),
-    el("table", { class: "weeks-table" }, [
-      el("thead", {}, [
-        el("tr", {}, [
-          el("th", {}, ["Semana"]),
-          el("th", {}, ["Pedidos"]),
-          el("th", {}, ["Faturamento"]),
-        ]),
-      ]),
-      el(
-        "tbody",
-        {},
-        month.weeks.map((w) =>
+    tableScroll(
+      el("table", { class: "weeks-table" }, [
+        el("thead", {}, [
           el("tr", {}, [
-            el("td", {}, [w.label]),
-            el("td", {}, [String(w.orders)]),
-            el("td", {}, [formatBRL(w.revenue)]),
+            el("th", {}, ["Semana"]),
+            el("th", {}, ["Pedidos"]),
+            el("th", {}, ["Faturamento"]),
           ]),
+        ]),
+        el(
+          "tbody",
+          {},
+          month.weeks.map((w) =>
+            el("tr", {}, [
+              el("td", {}, [w.label]),
+              el("td", {}, [String(w.orders)]),
+              el("td", {}, [formatBRL(w.revenue)]),
+            ]),
+          ),
         ),
-      ),
-    ]),
+      ]),
+    ),
   ]);
 }
 
@@ -172,28 +174,30 @@ function profitabilityMonthlyTable(profitability: ProfitabilityResponse): HTMLEl
   const monthsWithData = profitability.monthly.filter((m) => m.revenue !== 0 || m.expenses !== 0);
   const months = (monthsWithData.length > 0 ? monthsWithData : profitability.monthly).slice().reverse();
 
-  return el("table", { class: "weeks-table" }, [
-    el("thead", {}, [
-      el("tr", {}, [
-        el("th", {}, ["Mês"]),
-        el("th", {}, ["Faturamento"]),
-        el("th", {}, ["Despesas"]),
-        el("th", {}, ["Lucro"]),
-      ]),
-    ]),
-    el(
-      "tbody",
-      {},
-      months.map((m) =>
+  return tableScroll(
+    el("table", { class: "weeks-table" }, [
+      el("thead", {}, [
         el("tr", {}, [
-          el("td", {}, [monthLabel(m.monthISO)]),
-          el("td", {}, [formatBRL(m.revenue)]),
-          el("td", {}, [formatBRL(m.expenses)]),
-          el("td", { class: m.profit < 0 ? "profit-negative" : "profit-positive" }, [formatBRL(m.profit)]),
+          el("th", {}, ["Mês"]),
+          el("th", {}, ["Faturamento"]),
+          el("th", {}, ["Despesas"]),
+          el("th", {}, ["Lucro"]),
         ]),
+      ]),
+      el(
+        "tbody",
+        {},
+        months.map((m) =>
+          el("tr", {}, [
+            el("td", {}, [monthLabel(m.monthISO)]),
+            el("td", {}, [formatBRL(m.revenue)]),
+            el("td", {}, [formatBRL(m.expenses)]),
+            el("td", { class: m.profit < 0 ? "profit-negative" : "profit-positive" }, [formatBRL(m.profit)]),
+          ]),
+        ),
       ),
-    ),
-  ]);
+    ]),
+  );
 }
 
 function statCardPlain(label: string, value: string): HTMLElement {

@@ -32,6 +32,17 @@ export function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
+/**
+ * Envolve uma tabela num container com rolagem horizontal PROPRIA (ver .table-scroll no
+ * CSS). Tabela (<table>) com "width: 100%" nao encolhe abaixo do conteudo mais largo das
+ * suas celulas — sem este wrapper, uma tabela larga (ex.: Despesas/Borrachas, com colunas
+ * de texto livre) vazaria pra fora da tela e arrastaria a PAGINA INTEIRA pra rolagem
+ * horizontal, em vez de só a tabela em si rolar internamente.
+ */
+export function tableScroll(table: HTMLElement): HTMLElement {
+  return el("div", { class: "table-scroll" }, [table]);
+}
+
 export function clear(node: Element): void {
   while (node.firstChild) node.removeChild(node.firstChild);
 }

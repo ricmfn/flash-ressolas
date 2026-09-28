@@ -2,7 +2,7 @@ import { api, type ExpensesResponse } from "../api/client.js";
 import { formatBRL } from "../../shared/currency.js";
 import { parseFlexibleDate } from "../../shared/dates.js";
 import { EXPENSE_CATEGORIES, VARIABLE_EXPENSE_CATEGORIES } from "../../shared/metrics.js";
-import { el, clear } from "../ui/dom.js";
+import { el, clear, tableScroll } from "../ui/dom.js";
 
 interface ExpensesViewHandle {
   root: HTMLElement;
@@ -118,30 +118,32 @@ export function renderExpensesView(container: Element): ExpensesViewHandle {
         el("h2", {}, ["Lançamentos"]),
         ordered.length === 0
           ? el("p", { class: "state-banner state-banner--empty" }, ["Nenhuma despesa registrada ainda."])
-          : el("table", { class: "weeks-table expenses-table" }, [
-              el("thead", {}, [
-                el("tr", {}, [
-                  el("th", {}, ["Data"]),
-                  el("th", {}, ["Categoria"]),
-                  el("th", {}, ["Descrição"]),
-                  el("th", {}, ["Valor"]),
-                  el("th", {}, ["Classificação"]),
-                ]),
-              ]),
-              el(
-                "tbody",
-                {},
-                ordered.map((row) =>
+          : tableScroll(
+              el("table", { class: "weeks-table expenses-table" }, [
+                el("thead", {}, [
                   el("tr", {}, [
-                    el("td", {}, [row.date || "—"]),
-                    el("td", {}, [row.category || "—"]),
-                    el("td", { class: "expenses-table__description" }, [row.description || "—"]),
-                    el("td", {}, [formatBRL(row.value)]),
-                    el("td", {}, [row.classification ?? (isVariable(row) ? "Variável" : "Fixo")]),
+                    el("th", {}, ["Data"]),
+                    el("th", {}, ["Categoria"]),
+                    el("th", {}, ["Descrição"]),
+                    el("th", {}, ["Valor"]),
+                    el("th", {}, ["Classificação"]),
                   ]),
+                ]),
+                el(
+                  "tbody",
+                  {},
+                  ordered.map((row) =>
+                    el("tr", {}, [
+                      el("td", {}, [row.date || "—"]),
+                      el("td", {}, [row.category || "—"]),
+                      el("td", { class: "expenses-table__description" }, [row.description || "—"]),
+                      el("td", {}, [formatBRL(row.value)]),
+                      el("td", {}, [row.classification ?? (isVariable(row) ? "Variável" : "Fixo")]),
+                    ]),
+                  ),
                 ),
-              ),
-            ]),
+              ]),
+            ),
       ]),
     );
 
