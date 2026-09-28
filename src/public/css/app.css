@@ -115,9 +115,14 @@ a {
 
 .app-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   flex: 1;
   justify-content: center;
+  /* 4 abas (Pedidos/Dashboard/Borrachas/Despesas) + logo + Sair podem nao caber numa linha
+     so em telas de celular estreitas — sem isso o nav estourava a largura da tela em vez de
+     quebrar linha (mesmo bug de fundo do menu de status: elemento sem onde encolher). */
+  row-gap: 8px;
 }
 
 .app-nav__btn {
@@ -946,7 +951,8 @@ a {
 }
 
 .rubber-form__field input,
-.rubber-form__field textarea {
+.rubber-form__field textarea,
+.rubber-form__field select {
   background: var(--bg-card);
   border: 1px solid var(--border);
   color: var(--text);
@@ -963,6 +969,20 @@ a {
 .rubber-form__actions {
   display: flex;
   gap: 8px;
+}
+
+/* ---------- Despesas ---------- */
+
+.expenses-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.expenses-table__description {
+  max-width: 320px;
+  color: var(--text-dim);
+  font-size: 0.82rem;
 }
 
 /* ---------- Percent editor ---------- */

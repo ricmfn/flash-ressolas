@@ -130,6 +130,7 @@ export interface ExpenseRowJSON {
   category: string;
   description: string;
   value: number | null;
+  classification: "Fixo" | "Variável" | null;
 }
 
 export interface ExpensesResponse {
@@ -216,6 +217,17 @@ export const api = {
   sync: () => request<SyncResponse>("/api/sync", { method: "POST" }),
   dashboard: () => request<DashboardResponse>("/api/dashboard"),
   expenses: () => request<ExpensesResponse>("/api/expenses"),
+  addExpense: (input: {
+    date: string;
+    category: string;
+    description: string;
+    value: number;
+    classification?: "Fixo" | "Variável";
+  }) =>
+    request<ExpensesResponse>("/api/expenses", {
+      method: "POST",
+      body: JSON.stringify(input),
+    }),
   profitability: () => request<ProfitabilityResponse>("/api/profitability"),
   rubber: () => request<RubberResponse>("/api/rubber"),
   updateRubberPercent: (sheetRowIndex: number, percent: number) =>

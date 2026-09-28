@@ -27,6 +27,28 @@ function makeFakeSheets(rows: string[][], delayMs = 5): { sheets: SheetsClient; 
   return { sheets: fake as unknown as SheetsClient, callCount: () => calls };
 }
 
+/** Fake de SheetsClient com appendRow espionavel + contador de getValues, pro teste de
+ * ExpensesRepository.addExpense (precisa dos dois pra confirmar que addExpense grava a
+ * linha certa E invalida o cache, sem precisar chamar invalidateCache() manualmente). */
+function makeFakeSheetsWithAppend(): {
+  sheets: SheetsClient;
+  appended: Array<{ sheetName: string; row: (string | number)[] }>;
+  getValuesCallCount: () => number;
+} {
+  const appended: Array<{ sheetName: string; row: (string | number)[] }> = [];
+  let getValuesCalls = 0;
+  const fake = {
+    getValues: async () => {
+      getValuesCalls += 1;
+      return [];
+    },
+    appendRow: async (sheetName: string, row: (string | number)[]) => {
+      appended.push({ sheetName, row });
+    },
+  };
+  return { sheets: fake as unknown as SheetsClient, appended, getValuesCallCount: () => getValuesCalls };
+}
+
 test("ExpensesRepository.readAll: parseia linhas e ignora linhas 100% vazias", async () => {
   const { sheets } = makeFakeSheets([
     ["10/06/2026", "Materiais", "Cola Vipal", "R$ 40,00"],
@@ -69,4 +91,51 @@ test("ExpensesRepository.invalidateCache: forca uma leitura nova mesmo dentro do
   await repo.readAll();
 
   assert.equal(callCount(), 2);
+});
+
+test("ExpensesRepository.readAll: parseia a coluna Classificação (E), tolerante a acento/maiusculas", async () => {
+  const { sheets } = makeFakeSheets([
+    ["10/06/2026", "Materiais", "cola", "10", "Variável"],
+    ["11/06/2026", "Equipamentos", "prensa", "20", "fixo"], // minusculo
+    ["12/06/2026", "Outra", "estante", "30", "VARIAVEL"], // maiusculo, sem acento
+    ["13/06/2026", "Transporte", "pix", "40", ""], // vazio -> null
+    ["14/06/2026", "Transporte", "pix", "50"], // coluna ausente na linha -> null
+  ]);
+  const repo = new ExpensesRepository(sheets);
+  const rows = await repo.readAll();
+
+  assert.equal(rows.length, 5);
+  assert.equal(rows[0]?.classification, "Variável");
+  assert.equal(rows[1]?.classification, "Fixo");
+  assert.equal(rows[2]?.classification, "Variável");
+  assert.equal(rows[3]?.classification, null);
+  assert.equal(rows[4]?.classification, null);
+});
+
+test("ExpensesRepository.addExpense: grava as 5 colunas (inclusive Classificação) e invalida o cache", async () => {
+  const { sheets, appended, getValuesCallCount } = makeFakeSheetsWithAppend();
+  const repo = new ExpensesRepository(sheets);
+
+  // Popula o cache primeiro, pra confirmar que addExpense o descarta.
+  await repo.readAll();
+  assert.equal(getValuesCallCount(), 1);
+
+  await repo.addExpense({
+    date: "25/09/2026",
+    category: "Ferramentas e Insumos",
+    description: "Estante",
+    value: 169,
+    classification: "Variável",
+  });
+
+  assert.equal(appended.length, 1);
+  assert.deepEqual(appended[0], {
+    sheetName: "Financeiro",
+    row: ["25/09/2026", "Ferramentas e Insumos", "Estante", 169, "Variável"],
+  });
+
+  // Sem invalidateCache() manual: se addExpense nao tivesse limpado this.cache, essa
+  // leitura serviria do cache (ainda dentro do TTL) e getValues NAO seria chamado de novo.
+  await repo.readAll();
+  assert.equal(getValuesCallCount(), 2);
 });

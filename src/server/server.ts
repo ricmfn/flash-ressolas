@@ -19,7 +19,14 @@ import { createSessionToken } from "./auth/session.js";
 import { requireAuth, SESSION_COOKIE } from "./auth/middleware.js";
 import { orderToJSON } from "./serialize.js";
 import { uploadPublicPhoto } from "./google/driveClient.js";
-import { computeDashboardMetrics, computeProfitability, summarizeExpenses } from "../shared/metrics.js";
+import {
+  computeDashboardMetrics,
+  computeProfitability,
+  summarizeExpenses,
+  EXPENSE_CATEGORIES,
+  VARIABLE_EXPENSE_CATEGORIES,
+  type ExpenseClassification,
+} from "../shared/metrics.js";
 import { summarizeRubber } from "../shared/rubber.js";
 import { currentRubberAssignments, countPairsPerRubberSheet } from "../shared/rubberUsage.js";
 import { isValidStatus, isPending, isAwaitingDropoff } from "../shared/status.js";
@@ -178,6 +185,60 @@ router.get("/api/expenses", async (ctx) => {
     sendJson(ctx, 200, summarizeExpenses(rows));
   } catch (err) {
     sendJson(ctx, 502, { error: err instanceof Error ? err.message : "Erro ao ler despesas." });
+  }
+});
+
+router.post("/api/expenses", async (ctx) => {
+  if (!requireAuth(ctx)) return;
+  const body = await readJsonBody<{
+    date?: string;
+    category?: string;
+    description?: string;
+    value?: number | string;
+    classification?: string;
+  }>(ctx.req);
+
+  const category = (body.category ?? "").trim();
+  const description = (body.description ?? "").trim();
+  if (!category) return sendJson(ctx, 400, { error: "Informe a categoria da despesa." });
+  if (!description) return sendJson(ctx, 400, { error: "Informe a descrição da despesa." });
+  if (body.value === undefined || body.value === null || body.value === "") {
+    return sendJson(ctx, 400, { error: "Informe o valor da despesa." });
+  }
+  const parsedValue = Number(typeof body.value === "string" ? body.value.replace(",", ".") : body.value);
+  if (!Number.isFinite(parsedValue) || parsedValue < 0) {
+    return sendJson(ctx, 422, { error: "Valor inválido." });
+  }
+
+  // Categoria da lista fechada: classificação SEMPRE derivada aqui (nunca confia no que o
+  // cliente mandou), pra nunca deixar uma categoria conhecida ser gravada com a
+  // classificação errada. Só categoria "Outra" (texto livre, fora da lista) usa a escolha
+  // explícita do formulário — e exige que ela venha preenchida.
+  const isKnownCategory = (EXPENSE_CATEGORIES as readonly string[]).includes(category);
+  let classification: ExpenseClassification;
+  if (isKnownCategory) {
+    classification = VARIABLE_EXPENSE_CATEGORIES.has(category) ? "Variável" : "Fixo";
+  } else {
+    if (body.classification !== "Fixo" && body.classification !== "Variável") {
+      return sendJson(ctx, 400, {
+        error: 'Pra categoria "Outra", informe se o custo é fixo ou variável.',
+      });
+    }
+    classification = body.classification;
+  }
+
+  try {
+    await expensesRepo.addExpense({
+      date: (body.date ?? "").trim(),
+      category,
+      description,
+      value: parsedValue,
+      classification,
+    });
+    const rows = await expensesRepo.readAll();
+    sendJson(ctx, 200, summarizeExpenses(rows));
+  } catch (err) {
+    sendJson(ctx, 422, { error: err instanceof Error ? err.message : "Erro ao adicionar despesa." });
   }
 });
 

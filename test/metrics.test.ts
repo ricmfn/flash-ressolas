@@ -238,7 +238,14 @@ test("faturamento mensal: pedidos com data de entrega 'carimbada' em 05/09/2026 
 });
 
 function makeExpense(overrides: Partial<ExpenseRow>): ExpenseRow {
-  return { date: "10/06/2026", category: "Ferramentas e Insumos", description: "teste", value: 10, ...overrides };
+  return {
+    date: "10/06/2026",
+    category: "Ferramentas e Insumos",
+    description: "teste",
+    value: 10,
+    classification: null,
+    ...overrides,
+  };
 }
 
 function makeRubberSheet(overrides: Partial<RubberSheet> & { sheetRowIndex: number }): RubberSheet {
@@ -325,6 +332,23 @@ test("rentabilidade por mes: agrupa faturamento, despesas e borracha no mes corr
   assert.equal(may?.revenue, 50);
   assert.equal(may?.expenses, 10);
   assert.equal(may?.profit, 40);
+});
+
+test("rentabilidade: classificação explícita da linha tem prioridade sobre o fallback por categoria", () => {
+  const now = new Date("2026-06-15T12:00:00Z");
+  const expenses: ExpenseRow[] = [
+    // "Materiais" normalmente seria variável (VARIABLE_EXPENSE_CATEGORIES) — classificação
+    // explícita "Fixo" na linha deve vencer o fallback por nome de categoria.
+    makeExpense({ category: "Materiais", value: 100, classification: "Fixo" }),
+    // Categoria "Outra" (fora da lista fechada) nunca aparece em VARIABLE_EXPENSE_CATEGORIES
+    // — sem a classificação explícita "Variável" aqui, cairia em fixo por padrão.
+    makeExpense({ category: "Estante (TikTok Shop)", value: 50, classification: "Variável" }),
+  ];
+
+  const p = computeProfitability([], expenses, [], now);
+
+  assert.equal(p.variableExpenses, 50); // só a "Outra" marcada Variável
+  assert.equal(p.fixedExpenses, 100); // "Materiais" forçado pra Fixo
 });
 
 test("rentabilidade: despesa com data invalida/vazia nunca quebra o agrupamento mensal, so fica de fora dos meses", () => {

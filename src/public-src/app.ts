@@ -4,8 +4,9 @@ import { renderLoginView } from "./views/loginView.js";
 import { renderOrdersView } from "./views/ordersView.js";
 import { renderDashboardView } from "./views/dashboardView.js";
 import { renderRubberView } from "./views/rubberView.js";
+import { renderExpensesView } from "./views/expensesView.js";
 
-type View = "orders" | "dashboard" | "borrachas";
+type View = "orders" | "dashboard" | "borrachas" | "despesas";
 
 /** UNICO timer de auto-refresh do lado do cliente (complementa o auto-sync do servidor,
  * que roda no backend independentemente da tela estar aberta). */
@@ -22,6 +23,7 @@ function startApp(): void {
   let ordersHandle: ReturnType<typeof renderOrdersView> | null = null;
   let dashboardHandle: ReturnType<typeof renderDashboardView> | null = null;
   let rubberHandle: ReturnType<typeof renderRubberView> | null = null;
+  let expensesHandle: ReturnType<typeof renderExpensesView> | null = null;
 
   function stopClientRefresh(): void {
     if (clientRefreshTimer !== null) {
@@ -35,7 +37,8 @@ function startApp(): void {
     clientRefreshTimer = setInterval(() => {
       if (currentView === "orders") void ordersHandle?.refresh(false);
       else if (currentView === "dashboard") void dashboardHandle?.refresh();
-      else void rubberHandle?.refresh();
+      else if (currentView === "borrachas") void rubberHandle?.refresh();
+      else void expensesHandle?.refresh();
     }, CLIENT_REFRESH_INTERVAL_MS);
   }
 
@@ -48,6 +51,7 @@ function startApp(): void {
         navButton("orders", "Pedidos"),
         navButton("dashboard", "Dashboard"),
         navButton("borrachas", "Borrachas"),
+        navButton("despesas", "Despesas"),
       ]),
       el(
         "button",
@@ -72,12 +76,15 @@ function startApp(): void {
     ordersHandle = null;
     dashboardHandle = null;
     rubberHandle = null;
+    expensesHandle = null;
     if (currentView === "orders") {
       ordersHandle = renderOrdersView(main);
     } else if (currentView === "dashboard") {
       dashboardHandle = renderDashboardView(main);
-    } else {
+    } else if (currentView === "borrachas") {
       rubberHandle = renderRubberView(main);
+    } else {
+      expensesHandle = renderExpensesView(main);
     }
   }
 

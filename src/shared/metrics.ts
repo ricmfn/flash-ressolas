@@ -215,11 +215,23 @@ export function computeDashboardMetrics(orders: Order[], now: Date = new Date())
   };
 }
 
+export type ExpenseClassification = "Fixo" | "Variável";
+
 export interface ExpenseRow {
   date: string;
   category: string;
   description: string;
   value: number | null;
+  /**
+   * Coluna "Classificação" (E) da aba Financeiro — gravada automaticamente pelo app em todo
+   * lançamento NOVO (ver ExpensesRepository.addExpense): pras categorias fixas da lista
+   * fechada, é derivada de VARIABLE_EXPENSE_CATEGORIES; pra categoria "Outra" (texto livre),
+   * é a escolha explícita do usuário no formulário. Linhas antigas (lançadas antes dessa
+   * coluna existir) ficam com null aqui — nesse caso computeProfitability cai pro fallback
+   * de sempre (olhar VARIABLE_EXPENSE_CATEGORIES pelo nome da categoria), sem precisar de
+   * backfill retroativo na planilha.
+   */
+  classification: ExpenseClassification | null;
 }
 
 export interface ExpensesSummary {
@@ -252,6 +264,23 @@ export function summarizeExpenses(rows: ExpenseRow[]): ExpensesSummary {
  * Ajustavel: se novas categorias forem usadas na planilha, so incluir/tirar daqui.
  */
 export const VARIABLE_EXPENSE_CATEGORIES = new Set<string>(["Materiais", "Ferramentas e Insumos"]);
+
+/**
+ * Categorias fechadas do formulário "Nova despesa" (ver expensesView.ts) — as mesmas já
+ * usadas na planilha hoje (EXPENSES_SEED + LEGACY_INVESTMENT_ROWS). O formulário também
+ * oferece "Outra" (texto livre); nesse caso o servidor NÃO deriva a classificação daqui —
+ * exige que o cliente mande explicitamente "Fixo" ou "Variável" (ver POST /api/expenses em
+ * server.ts). Ajustável: uma categoria nova usada com frequência via "Outra" pode ser
+ * promovida pra esta lista (só editar aqui, sem mudar mais nada).
+ */
+export const EXPENSE_CATEGORIES = [
+  "Equipamentos",
+  "Materiais",
+  "Fôrmas",
+  "Ferramentas e Insumos",
+  "Transporte",
+  "Formação",
+] as const;
 
 export interface ProfitabilityMonthPoint {
   monthISO: string;
@@ -306,7 +335,14 @@ export function computeProfitability(
   for (const row of expenseRows) {
     if (row.value === null) continue;
     totalExpenses += row.value;
-    if (VARIABLE_EXPENSE_CATEGORIES.has(row.category)) {
+    // Classificação explícita da linha (coluna E, gravada a partir de quando esse campo
+    // passou a existir) tem prioridade; linhas antigas sem ela (ou undefined, por segurança)
+    // caem no fallback de sempre.
+    const hasExplicitClassification = row.classification === "Fixo" || row.classification === "Variável";
+    const isVariable = hasExplicitClassification
+      ? row.classification === "Variável"
+      : VARIABLE_EXPENSE_CATEGORIES.has(row.category);
+    if (isVariable) {
       variableExpenses += row.value;
     } else {
       fixedExpenses += row.value;
