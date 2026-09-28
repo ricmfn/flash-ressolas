@@ -132,6 +132,24 @@ a {
   row-gap: 8px;
 }
 
+/* Celular estreito (ate ~480px): com logo + 4 abas + "Sair" tudo espremido numa unica linha
+   flex, sobrava so uma faixa bem fina pro nav (entre logo e Sair) — cada aba nao cabia nem
+   2 a 2 nessa faixa e caia sozinha na propria linha, empilhando 4 linhas de botao com um
+   monte de espaco vazio ao redor da logo/Sair (era isso que ficava "vazio" no topo da tela).
+   Aqui o cabecalho vira 2 linhas: logo + Sair numa linha compacta, e o nav ganha a largura
+   INTEIRA da tela na linha de baixo — aí as 4 abas cabem 2 a 2, bem mais compacto. */
+@media (max-width: 480px) {
+  .app-header {
+    flex-wrap: wrap;
+    justify-content: space-between;
+  }
+
+  .app-nav {
+    order: 1;
+    flex-basis: 100%;
+  }
+}
+
 .app-nav__btn {
   background: transparent;
   border: 1px solid var(--border);
