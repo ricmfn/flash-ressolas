@@ -20,7 +20,7 @@ export function orderToJSON(order: Order) {
     whatsappUrl: whatsappLink(order.customerPhone),
     shoeModel: order.shoeModel,
     shoeSize: order.shoeSize,
-    photo: photo, // { fileId, viewUrl, driveUrl } | null
+    photo: photo, // { fileId, viewUrl, thumbUrl, driveUrl } | null
     detail: order.detail,
     status: order.status,
     statusInferred: order.statusInferred,

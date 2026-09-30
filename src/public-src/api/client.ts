@@ -44,6 +44,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResult<T
 export interface OrderPhotoJSON {
   fileId: string;
   viewUrl: string;
+  thumbUrl: string;
   driveUrl: string;
 }
 

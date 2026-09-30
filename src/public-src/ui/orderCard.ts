@@ -169,7 +169,12 @@ export function createOrderCard({
         onclick: () => openPhotoViewer(order.photo!.viewUrl, `Foto do pedido de ${order.customerName}`),
       }, [
         el("img", {
-          src: order.photo.viewUrl,
+          // Miniatura leve pro card (o Google resiza no servidor pelo "=wXXX" da URL) — a
+          // versao grande (viewUrl) so e' baixada quando o usuario toca pra ampliar (ver
+          // onclick acima). Antes as duas usavam a MESMA url de 1600px, entao toda foto da
+          // lista de pedidos baixava 1600px de largura so pra mostrar um quadradinho de
+          // 84-110px — o principal peso da tela de Pedidos no carregamento inicial.
+          src: order.photo.thumbUrl,
           alt: `Foto do pedido de ${order.customerName}`,
           class: "order-card__photo",
           loading: "lazy",

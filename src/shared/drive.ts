@@ -21,8 +21,18 @@ export function extractDriveFileId(url: unknown): string | null {
 
 export interface DrivePhoto {
   fileId: string;
-  /** URL para <img>, tamanho grande, sem forcar download. */
+  /** URL para <img>, tamanho grande (visualizador ampliado / photoViewer.ts), sem forcar
+   * download. NAO usar pra miniatura do card — ver thumbUrl. */
   viewUrl: string;
+  /**
+   * URL pra miniatura do card da lista de Pedidos (exibida a 84-110px CSS). O lh3.googleusercontent.com
+   * resiza a imagem NO SERVIDOR do Google conforme o parametro "=wXXX" na propria URL — ou seja,
+   * pedir w320 aqui baixa uma imagem de verdade menor (nao só encolhida via CSS depois de baixada
+   * inteira em 1600px). 320px cobre confortavelmente ate ~3x de densidade de tela num card de
+   * 110px (110*3=330), sem precisar mandar o pedido de foto do cliente inteiro (varios MB de foto
+   * de celular, geralmente) só pra mostrar um quadradinho pequeno na lista.
+   */
+  thumbUrl: string;
   /** URL para abrir o arquivo original no Google Drive (fallback / "abrir no Drive"). */
   driveUrl: string;
 }
@@ -33,6 +43,7 @@ export function buildDrivePhoto(rawUrl: unknown): DrivePhoto | null {
   return {
     fileId,
     viewUrl: `https://lh3.googleusercontent.com/d/${fileId}=w1600`,
+    thumbUrl: `https://lh3.googleusercontent.com/d/${fileId}=w320`,
     driveUrl: `https://drive.google.com/file/d/${fileId}/view`,
   };
 }
