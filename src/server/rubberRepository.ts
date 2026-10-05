@@ -18,16 +18,22 @@ function parsePercent(raw: unknown): number | null {
  * Aba "Borrachas": Data | Marca | Fornecedor | Valor | % restante | Observações.
  *
  * readAll() e re-chamado pelo cliente a cada 60s (auto-refresh) enquanto a aba Borrachas
- * estiver aberta — cacheia o resultado por CACHE_TTL_MS pra nao bater na planilha ao vivo
- * toda vez (mesmo raciocinio do ExpensesRepository). Como updatePercent/addSheet
- * respondem com uma leitura fresca pro cliente ver o proprio efeito na hora, os dois
- * invalidam o cache antes de retornar — sem isso, salvar um % editado mostraria o valor
- * antigo por ate 60s.
+ * estiver aberta, E por /api/profitability (custo por par agora inclui as folhas de
+ * borracha) — cacheia o resultado por CACHE_TTL_MS pra nao bater na planilha ao vivo toda
+ * vez (mesmo raciocinio do ExpensesRepository). Como updatePercent/addSheet respondem com
+ * uma leitura fresca pro cliente ver o proprio efeito na hora, os dois invalidam o cache
+ * antes de retornar — sem isso, salvar um % editado mostraria o valor antigo por ate 60s.
+ *
+ * `pending` evita a mesma corrida do ExpensesRepository: se /api/rubber e /api/profitability
+ * (ou duas abas/dispositivos com o auto-refresh sincronizado) chegarem com o cache frio ao
+ * mesmo tempo, a 2a reaproveita a leitura já em voo da 1a em vez de duplicar a chamada à
+ * planilha.
  */
 const CACHE_TTL_MS = 60_000;
 
 export class RubberRepository {
   private cache: { sheets: RubberSheet[]; fetchedAtMs: number } | null = null;
+  private pending: Promise<RubberSheet[]> | null = null;
 
   constructor(private readonly sheets: SheetsClient) {}
 
@@ -36,24 +42,33 @@ export class RubberRepository {
     if (this.cache && now - this.cache.fetchedAtMs < CACHE_TTL_MS) {
       return this.cache.sheets;
     }
-    const rows = await this.sheets.getValues(`${config.rubberSheetName}!A2:F`);
-    const out: RubberSheet[] = [];
-    rows.forEach((row, i) => {
-      const [date, brand, supplier, valueRaw, percentRaw, notes] = row;
-      if (!date && !brand && !supplier && !valueRaw && !percentRaw && !notes) return;
-      const parsedValue = parseBRLCurrency(valueRaw);
-      out.push({
-        sheetRowIndex: i + 2,
-        date: (date ?? "").toString().trim(),
-        brand: (brand ?? "").toString().trim(),
-        supplier: (supplier ?? "").toString().trim(),
-        value: parsedValue.ok ? parsedValue.value : null,
-        percentRemaining: parsePercent(percentRaw),
-        notes: (notes ?? "").toString().trim(),
-      });
-    });
-    this.cache = { sheets: out, fetchedAtMs: now };
-    return out;
+    if (this.pending) return this.pending;
+
+    this.pending = (async () => {
+      try {
+        const rows = await this.sheets.getValues(`${config.rubberSheetName}!A2:F`);
+        const out: RubberSheet[] = [];
+        rows.forEach((row, i) => {
+          const [date, brand, supplier, valueRaw, percentRaw, notes] = row;
+          if (!date && !brand && !supplier && !valueRaw && !percentRaw && !notes) return;
+          const parsedValue = parseBRLCurrency(valueRaw);
+          out.push({
+            sheetRowIndex: i + 2,
+            date: (date ?? "").toString().trim(),
+            brand: (brand ?? "").toString().trim(),
+            supplier: (supplier ?? "").toString().trim(),
+            value: parsedValue.ok ? parsedValue.value : null,
+            percentRemaining: parsePercent(percentRaw),
+            notes: (notes ?? "").toString().trim(),
+          });
+        });
+        this.cache = { sheets: out, fetchedAtMs: Date.now() };
+        return out;
+      } finally {
+        this.pending = null;
+      }
+    })();
+    return this.pending;
   }
 
   /**

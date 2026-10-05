@@ -305,6 +305,8 @@ export interface Profitability {
   fixedExpenses: number;
   /** variableExpenses / pairsDelivered — custo so de material (inclusive borracha) por par. */
   variableCostPerPair: number | null;
+  /** fixedExpenses / pairsDelivered — custo fixo (investimento) diluido por par, ate agora. */
+  fixedCostPerPair: number | null;
   /** totalExpenses / pairsDelivered — custo "tudo incluso" por par, ate agora. */
   totalCostPerPair: number | null;
   /** Ultimos 12 meses (mes atual por ultimo), faturamento x despesas lancadas naquele mes. */
@@ -359,6 +361,7 @@ export function computeProfitability(
   const profit = totalRevenue - totalExpenses;
   const marginPct = totalRevenue > 0 ? (profit / totalRevenue) * 100 : null;
   const variableCostPerPair = pairsDelivered > 0 ? variableExpenses / pairsDelivered : null;
+  const fixedCostPerPair = pairsDelivered > 0 ? fixedExpenses / pairsDelivered : null;
   const totalCostPerPair = pairsDelivered > 0 ? totalExpenses / pairsDelivered : null;
 
   // Agrupamento mensal (ultimos 12 meses, mes atual por ultimo) — faturamento pela mesma
@@ -408,7 +411,98 @@ export function computeProfitability(
     variableExpenses,
     fixedExpenses,
     variableCostPerPair,
+    fixedCostPerPair,
     totalCostPerPair,
     monthly,
   };
+}
+
+// ---------- Detalhamento de custo (janela "Custo fixo"/"Custo variável" por par) ----------
+
+export interface CostBreakdownItem {
+  /** Descrição real do lançamento (coluna "Descrição" da aba Financeiro, ou marca+fornecedor
+   * pras folhas de borracha, que não têm esse campo) — nunca um texto genérico inventado. */
+  description: string;
+  value: number;
+}
+
+export interface CostBreakdownCategory {
+  category: string;
+  total: number;
+  /**
+   * % que essa categoria representa do CUSTO TOTAL combinado (fixo + variável, incluindo
+   * borracha) — e não só dentro do proprio grupo fixo/variável. Isso é o mesmo numero,
+   * calculado em cima do agregado, que "quanto dessa categoria entra no custo de cada par"
+   * calculado em cima do custo por par: dividir os dois lados (categoria e total) pelo mesmo
+   * pairsDelivered cancela o pairsDelivered, então a % bate com totalCostPerPair sem precisar
+   * do numero de pares aqui.
+   */
+  pctOfTotalCost: number | null;
+  items: CostBreakdownItem[];
+}
+
+export interface CostBreakdown {
+  classification: ExpenseClassification;
+  total: number;
+  categories: CostBreakdownCategory[];
+}
+
+/**
+ * Detalha um dos dois grupos (Fixo ou Variável) em categorias, cada uma com os lançamentos
+ * reais que a compõem (ver CostBreakdownItem) e a % que representa do custo total combinado.
+ * Usado pela janela que abre ao clicar em "Custo fixo por par"/"Custo variável por par" no
+ * Dashboard (ver costBreakdownModal.ts). As folhas de borracha (aba Borrachas) sempre entram
+ * como uma categoria extra "Borrachas" dentro do grupo Variável — nunca no Fixo — usando
+ * marca + fornecedor de cada folha como "descrição", já que essa aba não tem campo Descrição.
+ */
+export function computeCostBreakdown(
+  expenseRows: ExpenseRow[],
+  rubberSheets: RubberSheet[],
+  classification: ExpenseClassification,
+  totalExpensesCombined: number,
+): CostBreakdown {
+  const byCategory = new Map<string, { total: number; items: CostBreakdownItem[] }>();
+
+  function addItem(category: string, description: string, value: number): void {
+    const key = category.trim() || "Sem categoria";
+    const entry = byCategory.get(key) ?? { total: 0, items: [] };
+    entry.total += value;
+    entry.items.push({ description: description.trim() || "—", value });
+    byCategory.set(key, entry);
+  }
+
+  for (const row of expenseRows) {
+    if (row.value === null) continue;
+    const hasExplicitClassification = row.classification === "Fixo" || row.classification === "Variável";
+    const rowClassification: ExpenseClassification = hasExplicitClassification
+      ? (row.classification as ExpenseClassification)
+      : VARIABLE_EXPENSE_CATEGORIES.has(row.category)
+        ? "Variável"
+        : "Fixo";
+    if (rowClassification !== classification) continue;
+    addItem(row.category, row.description, row.value);
+  }
+
+  if (classification === "Variável") {
+    for (const sheet of rubberSheets) {
+      if (sheet.value === null) continue;
+      const label = [sheet.brand, sheet.supplier].filter((part) => part.trim() !== "").join(" – ");
+      addItem("Borrachas", label, sheet.value);
+    }
+  }
+
+  const categories: CostBreakdownCategory[] = [];
+  let total = 0;
+  for (const [category, entry] of byCategory) {
+    total += entry.total;
+    categories.push({
+      category,
+      total: entry.total,
+      items: entry.items.sort((a, b) => b.value - a.value),
+      pctOfTotalCost: totalExpensesCombined > 0 ? (entry.total / totalExpensesCombined) * 100 : null,
+    });
+  }
+  categories.sort((a, b) => b.total - a.total);
+
+  return { classification, total, categories };
 }

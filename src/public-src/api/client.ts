@@ -185,6 +185,7 @@ export interface ProfitabilityResponse {
   variableExpenses: number;
   fixedExpenses: number;
   variableCostPerPair: number | null;
+  fixedCostPerPair: number | null;
   totalCostPerPair: number | null;
   monthly: ProfitabilityMonthJSON[];
 }

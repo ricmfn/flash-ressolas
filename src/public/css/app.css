@@ -794,6 +794,128 @@ a {
   cursor: pointer;
 }
 
+/* ---------- Janela de detalhamento de custo (ver costBreakdownModal.ts) ---------- */
+
+.cost-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(0, 0, 0, 0.78);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+.cost-modal__card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  max-width: 480px;
+  width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cost-modal__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.cost-modal__title {
+  font-family: var(--font-display);
+  font-size: 1rem;
+  color: var(--neon);
+  margin: 0;
+  letter-spacing: 0.02em;
+}
+
+.cost-modal__close {
+  background: var(--bg-card);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.cost-modal__subtitle {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  margin: 2px 0 14px;
+}
+
+.cost-modal__categories {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.cost-modal__category {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+}
+
+.cost-modal__category-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.cost-modal__category-pct {
+  font-size: 0.72rem;
+  color: var(--neon-dim);
+  white-space: nowrap;
+}
+
+.cost-modal__category-total {
+  font-size: 1.05rem;
+  font-weight: 800;
+  margin-top: 2px;
+}
+
+.cost-modal__items {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cost-modal__item {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.82rem;
+}
+
+.cost-modal__item-desc {
+  color: var(--text-dim);
+  overflow-wrap: anywhere;
+}
+
+.cost-modal__item-value {
+  flex-shrink: 0;
+  font-weight: 600;
+}
+
 /* ---------- Dashboard ---------- */
 
 .dashboard-view {
@@ -839,6 +961,27 @@ a {
 .stat-card__sub {
   font-size: 0.72rem;
   color: var(--text-dim);
+}
+
+/* Variante clicavel do stat-card (ver clickableStatCard em dashboardView.ts) — e' um
+   <button>, entao reseta os defaults de botao do navegador pra parecer com o card normal,
+   so' com um leve destaque no hover/foco pra indicar que e' interativo. */
+.stat-card--clickable {
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  border-color: var(--border);
+  transition: border-color 0.15s ease, transform 0.1s ease;
+}
+
+.stat-card--clickable:hover,
+.stat-card--clickable:focus-visible {
+  border-color: var(--neon-dim);
+}
+
+.stat-card--clickable:active {
+  transform: scale(0.98);
 }
 
 .week-chart {

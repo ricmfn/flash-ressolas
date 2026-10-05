@@ -1,6 +1,14 @@
-import { api, type DashboardResponse, type ExpensesResponse, type ProfitabilityResponse } from "../api/client.js";
+import {
+  api,
+  type DashboardResponse,
+  type ExpensesResponse,
+  type ProfitabilityResponse,
+  type RubberResponse,
+} from "../api/client.js";
 import { formatBRL } from "../../shared/currency.js";
+import { computeCostBreakdown } from "../../shared/metrics.js";
 import { el, clear, tableScroll } from "../ui/dom.js";
+import { openCostBreakdownModal } from "../ui/costBreakdownModal.js";
 
 interface DashboardViewHandle {
   root: HTMLElement;
@@ -211,6 +219,7 @@ export function renderDashboardView(container: Element): DashboardViewHandle {
   let dashboard: DashboardResponse | null = null;
   let expenses: ExpensesResponse | null = null;
   let profitability: ProfitabilityResponse | null = null;
+  let rubber: RubberResponse | null = null;
   let loading = true;
   let error: string | null = null;
   // Indice selecionado dentro de dashboard.monthlyRevenue (historico de faturamento mensal).
@@ -344,10 +353,19 @@ export function renderDashboardView(container: Element): DashboardViewHandle {
           ]),
           el("h3", { class: "dashboard-subheading" }, ["Custo por par ressolado"]),
           el("div", { class: "stat-grid" }, [
-            statCard(
+            clickableStatCard(
+              "Custo fixo por par",
+              hasPairs ? formatBRL(profitability.fixedCostPerPair) : "—",
+              hasPairs
+                ? "toque para ver o detalhamento"
+                : "ainda sem pares entregues e pagos",
+              openFixedCostModal,
+            ),
+            clickableStatCard(
               "Custo variável por par (só material)",
               hasPairs ? formatBRL(profitability.variableCostPerPair) : "—",
-              hasPairs ? "materiais, ferramentas e insumos, e as folhas da aba Borrachas" : "ainda sem pares entregues e pagos",
+              hasPairs ? "toque para ver o detalhamento" : "ainda sem pares entregues e pagos",
+              openVariableCostModal,
             ),
             statCard(
               "Custo total por par (tudo incluso, até agora)",
@@ -372,10 +390,54 @@ export function renderDashboardView(container: Element): DashboardViewHandle {
     ]);
   }
 
+  /** Mesmo visual do statCard, mas clicavel — abre a janela de detalhamento (ver
+   * openCostBreakdownModal). Usado pelos cards "Custo fixo/variável por par". */
+  function clickableStatCard(label: string, value: string, sub: string, onClick: () => void): HTMLElement {
+    return el(
+      "button",
+      { class: "stat-card stat-card--clickable", type: "button", onclick: onClick },
+      [
+        el("span", { class: "stat-card__label" }, [label]),
+        el("strong", { class: "stat-card__value" }, [value]),
+        el("span", { class: "stat-card__sub" }, [sub]),
+      ],
+    );
+  }
+
+  function openFixedCostModal(): void {
+    if (!expenses || !profitability) return;
+    const breakdown = computeCostBreakdown(expenses.rows, [], "Fixo", profitability.totalExpenses);
+    openCostBreakdownModal(
+      "Custo fixo por par",
+      "O que compõe o custo fixo e quanto cada parte representa do custo total por par (fixo + variável).",
+      breakdown,
+    );
+  }
+
+  function openVariableCostModal(): void {
+    if (!expenses || !profitability) return;
+    const breakdown = computeCostBreakdown(
+      expenses.rows,
+      rubber?.sheets ?? [],
+      "Variável",
+      profitability.totalExpenses,
+    );
+    openCostBreakdownModal(
+      "Custo variável por par",
+      "O que compõe o custo variável (materiais, ferramentas e insumos, e as folhas de borracha) e quanto cada parte representa do custo total por par.",
+      breakdown,
+    );
+  }
+
   async function refresh(): Promise<void> {
     loading = true;
     render();
-    const [dashRes, expRes, profRes] = await Promise.all([api.dashboard(), api.expenses(), api.profitability()]);
+    const [dashRes, expRes, profRes, rubberRes] = await Promise.all([
+      api.dashboard(),
+      api.expenses(),
+      api.profitability(),
+      api.rubber(),
+    ]);
     loading = false;
     if (dashRes.ok) {
       dashboard = dashRes.data;
@@ -388,6 +450,9 @@ export function renderDashboardView(container: Element): DashboardViewHandle {
     }
     if (profRes.ok) {
       profitability = profRes.data;
+    }
+    if (rubberRes.ok) {
+      rubber = rubberRes.data;
     }
     render();
   }
