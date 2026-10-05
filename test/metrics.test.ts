@@ -1,6 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { computeDashboardMetrics, computeProfitability, type ExpenseRow } from "../src/shared/metrics.js";
+import {
+  computeDashboardMetrics,
+  computeProfitability,
+  computeCostBreakdown,
+  type ExpenseRow,
+} from "../src/shared/metrics.js";
 import type { Order } from "../src/shared/types.js";
 import type { RubberSheet } from "../src/shared/rubber.js";
 
@@ -285,6 +290,7 @@ test("rentabilidade: custo variavel soma materiais/ferramentas + borracha; fôrm
   assert.equal(p.fixedExpenses, 1300); // 100 (fôrmas) + 1000 (equipamentos) + 200 (transporte)
   assert.equal(p.totalExpenses, 1450);
   assert.equal(p.variableCostPerPair, 75); // 150 / 2
+  assert.equal(p.fixedCostPerPair, 650); // 1300 / 2
   assert.equal(p.totalCostPerPair, 725); // 1450 / 2
   assert.equal(p.profit, 500 - 1450);
   assert.ok(p.marginPct !== null && p.marginPct < 0);
@@ -296,6 +302,7 @@ test("rentabilidade: sem nenhum par entregue e pago, custo por par fica null (nu
 
   assert.equal(p.pairsDelivered, 0);
   assert.equal(p.variableCostPerPair, null);
+  assert.equal(p.fixedCostPerPair, null);
   assert.equal(p.totalCostPerPair, null);
   assert.equal(p.totalExpenses, 50);
 });
@@ -364,4 +371,60 @@ test("rentabilidade: despesa com data invalida/vazia nunca quebra o agrupamento 
   for (const m of p.monthly) {
     assert.equal(m.expenses, 0); // mas nao em nenhum mes especifico
   }
+});
+
+// ---------- computeCostBreakdown (janela "Custo fixo/variável por par") ----------
+
+test("detalhamento de custo: agrupa por categoria, lista as descricoes reais e calcula % do custo total combinado", () => {
+  const expenses: ExpenseRow[] = [
+    makeExpense({ category: "Materiais", description: "Cola Vipal", value: 40 }),
+    makeExpense({ category: "Materiais", description: "Cola Vipafix", value: 20 }),
+    makeExpense({ category: "Ferramentas e Insumos", description: "Lixa", value: 20 }),
+    makeExpense({ category: "Equipamentos", description: "Máquina de costura", value: 100, classification: "Fixo" }),
+  ];
+  const totalCombined = 180; // 40+20+20 (variavel) + 100 (fixo)
+
+  const variavel = computeCostBreakdown(expenses, [], "Variável", totalCombined);
+  assert.equal(variavel.total, 80);
+  assert.equal(variavel.categories.length, 2);
+  const materiais = variavel.categories.find((c) => c.category === "Materiais");
+  assert.equal(materiais?.total, 60);
+  assert.equal(materiais?.pctOfTotalCost, (60 / 180) * 100);
+  assert.deepEqual(
+    materiais?.items.map((i) => i.description),
+    ["Cola Vipal", "Cola Vipafix"], // ordenado por valor desc: 40 antes de 20
+  );
+
+  const fixo = computeCostBreakdown(expenses, [], "Fixo", totalCombined);
+  assert.equal(fixo.total, 100);
+  assert.equal(fixo.categories.length, 1);
+  assert.equal(fixo.categories[0]?.category, "Equipamentos");
+  assert.equal(fixo.categories[0]?.items[0]?.description, "Máquina de costura");
+});
+
+test("detalhamento de custo: folhas de borracha so' aparecem no grupo Variável, como categoria 'Borrachas' com marca+fornecedor como descricao", () => {
+  const rubberSheets: RubberSheet[] = [
+    makeRubberSheet({ sheetRowIndex: 2, brand: "Vulcaflex", supplier: "Fornecedor X", value: 60 }),
+  ];
+
+  const variavel = computeCostBreakdown([], rubberSheets, "Variável", 60);
+  assert.equal(variavel.categories.length, 1);
+  assert.equal(variavel.categories[0]?.category, "Borrachas");
+  assert.equal(variavel.categories[0]?.items[0]?.description, "Vulcaflex – Fornecedor X");
+  assert.equal(variavel.categories[0]?.pctOfTotalCost, 100);
+
+  const fixo = computeCostBreakdown([], rubberSheets, "Fixo", 60);
+  assert.equal(fixo.categories.length, 0); // borracha nunca entra no fixo
+});
+
+test("detalhamento de custo: classificacao explicita da linha tem prioridade, e sem faturamento combinado a % fica null em vez de dividir por zero", () => {
+  const expenses: ExpenseRow[] = [
+    makeExpense({ category: "Materiais", value: 100, classification: "Fixo" }),
+  ];
+  const fixo = computeCostBreakdown(expenses, [], "Fixo", 0);
+  assert.equal(fixo.total, 100);
+  assert.equal(fixo.categories[0]?.pctOfTotalCost, null);
+
+  const variavel = computeCostBreakdown(expenses, [], "Variável", 0);
+  assert.equal(variavel.categories.length, 0); // forcado pra Fixo, nao aparece no Variável
 });
